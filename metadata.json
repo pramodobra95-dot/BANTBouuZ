@@ -1,0 +1,6 @@
+{
+  "name": "BANTConfirm",
+  "description": "Premium B2B IT & Software Marketplace connecting buyers with verified vendors for CRM, ERP, Cloud, Telecom, AI, and Cybersecurity solutions with BANT qualification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
