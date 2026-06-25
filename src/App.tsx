@@ -4,7 +4,7 @@ import {
   ShieldAlert, Settings, Eye, HelpCircle, Phone, 
   MapPin, Globe, CheckCircle, List, ArrowRight, UserCheck, 
   Sparkles, Award, Shield, FileText, User, Lock, Mail, Building, LogOut,
-  Menu, X
+  Menu, X, AlertCircle, AlertTriangle, Info
 } from "lucide-react";
 import HomeView from "./components/HomeView";
 import UserPanel from "./components/UserPanel";
@@ -48,6 +48,41 @@ export default function App() {
       action
     });
   };
+
+  // Premium General Notification Toast (success, error, warning, info)
+  const [userToast, setUserToast] = useState<{
+    id: string;
+    message: string;
+    type: "success" | "error" | "info" | "warning";
+  } | null>(null);
+
+  const showUserToast = (message: string, type: "success" | "error" | "info" | "warning" = "info") => {
+    setUserToast({
+      id: Math.random().toString(),
+      message,
+      type
+    });
+  };
+
+  // Bind safeAlert custom toast dispatcher to window
+  useEffect(() => {
+    (window as any).__showToast = showUserToast;
+    return () => {
+      try {
+        delete (window as any).__showToast;
+      } catch (e) {}
+    };
+  }, []);
+
+  // Auto-dismiss user toast
+  useEffect(() => {
+    if (userToast) {
+      const timer = setTimeout(() => {
+        setUserToast(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [userToast]);
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -311,6 +346,15 @@ export default function App() {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!authEmail || !authEmail.trim() || !authEmail.includes("@")) {
+      safeAlert("Please enter a valid corporate email address.", "warning");
+      return;
+    }
+    if (!authPassword || authPassword.length < 6) {
+      safeAlert("Password must be at least 6 characters.", "warning");
+      return;
+    }
+
     try {
       if (isSupabaseConfigured) {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -340,7 +384,7 @@ export default function App() {
           setAuthModalOpen(false);
           setAuthEmail("");
           setAuthPassword("");
-          safeAlert(`Successfully logged in as ${userObj.name} (${userObj.role})!`);
+          safeAlert(`Successfully logged in as ${userObj.name} (${userObj.role})!`, "success");
           
           if (userObj.role === 'buyer') {
             setActiveTab('dashboard');
@@ -363,7 +407,7 @@ export default function App() {
           setAuthModalOpen(false);
           setAuthEmail("");
           setAuthPassword("");
-          safeAlert(`Successfully logged in as ${data.user.name} (${data.user.role})!`);
+          safeAlert(`Successfully logged in as ${data.user.name} (${data.user.role})!`, "success");
           
           if (data.user.role === 'buyer') {
             setActiveTab('dashboard');
@@ -373,17 +417,50 @@ export default function App() {
             setActiveTab('admin-panel');
           }
         } else {
-          safeAlert("Login failed. Please check credentials.");
+          safeAlert("Login failed. Please check credentials.", "error");
         }
       }
     } catch (err: any) {
       console.error(err);
-      safeAlert(err.message || "An error occurred during authentication.");
+      let errMsg = err.message || "An error occurred during authentication.";
+      if (errMsg.includes("security purposes") || errMsg.includes("only request this after")) {
+        errMsg = "Verification/login rate limit exceeded. For security purposes, please wait 60 seconds before trying again.";
+        safeAlert(errMsg, "warning");
+      } else if (errMsg.includes("validation")) {
+        safeAlert("Authentication validation error. Please check your credentials.", "error");
+      } else {
+        safeAlert(errMsg, "error");
+      }
     }
   };
 
   const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!signUpName.trim()) {
+      safeAlert("Please enter your full name.", "warning");
+      return;
+    }
+    if (!signUpEmail || !signUpEmail.trim() || !signUpEmail.includes("@")) {
+      safeAlert("Please enter a valid corporate email address.", "warning");
+      return;
+    }
+    if (!signUpPassword || signUpPassword.length < 6) {
+      safeAlert("Password must be at least 6 characters.", "warning");
+      return;
+    }
+    if (!signUpCompany.trim()) {
+      safeAlert("Please enter your organization or company name.", "warning");
+      return;
+    }
+    if (!signUpMobile.trim() || signUpMobile.replace(/\D/g, "").length < 10) {
+      safeAlert("Please enter a valid 10-digit contact number.", "warning");
+      return;
+    }
+    if (!signUpCity.trim()) {
+      safeAlert("Please specify your current city / headquarters location.", "warning");
+      return;
+    }
+
     try {
       if (isSupabaseConfigured) {
         const { data, error } = await supabase.auth.signUp({
@@ -477,7 +554,7 @@ export default function App() {
           setSignUpCompany("");
           setSignUpMobile("");
           setSignUpCity("");
-          safeAlert(`Account registered successfully as ${signUpName}!`);
+          safeAlert(`Account registered successfully as ${signUpName}!`, "success");
           
           if (signUpRole === 'buyer') {
             setActiveTab('dashboard');
@@ -513,7 +590,7 @@ export default function App() {
           setSignUpCompany("");
           setSignUpMobile("");
           setSignUpCity("");
-          safeAlert(`Account registered successfully as ${data.user.name}!`);
+          safeAlert(`Account registered successfully as ${data.user.name}!`, "success");
           
           if (data.user.role === 'buyer') {
             setActiveTab('dashboard');
@@ -524,12 +601,20 @@ export default function App() {
           }
           fetchAllData();
         } else {
-          safeAlert("Registration failed. Please check input parameters.");
+          safeAlert("Registration failed. Please check input parameters.", "error");
         }
       }
     } catch (err: any) {
       console.error(err);
-      safeAlert(err.message || "An error occurred during registration.");
+      let errMsg = err.message || "An error occurred during registration.";
+      if (errMsg.includes("security purposes") || errMsg.includes("only request this after")) {
+        errMsg = "Registration rate limit exceeded. For security purposes, please wait 60 seconds before submitting again.";
+        safeAlert(errMsg, "warning");
+      } else if (errMsg.includes("validation") || errMsg.toLowerCase().includes("invalid")) {
+        safeAlert("Registration validation failed. Please check your form fields.", "error");
+      } else {
+        safeAlert(errMsg, "error");
+      }
     }
   };
 
@@ -674,15 +759,21 @@ export default function App() {
           id: vendorData.id || `ven-${Date.now()}`,
           companyName: vendorData.companyName,
           name: vendorData.name || "",
-          email: vendorData.email || "",
-          mobile: vendorData.mobile || "",
+          logo: vendorData.logo || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=150",
           gstNumber: vendorData.gstNumber || "",
           panNumber: vendorData.panNumber || "",
           website: vendorData.website || "",
           businessCategory: vendorData.businessCategory || "Custom Software Development",
+          productsOffered: vendorData.productsOffered || [],
+          rating: parseFloat(vendorData.rating) || 5.0,
           location: vendorData.location || "India",
           approved: vendorData.approved || false,
-          verified: vendorData.verified || false,
+          docVerified: vendorData.docVerified || false,
+          plan: vendorData.plan || "Free",
+          productsCount: parseInt(vendorData.productsCount) || 0,
+          leadsCount: parseInt(vendorData.leadsCount) || 0,
+          revenue: parseFloat(vendorData.revenue) || 0,
+          viewsCount: parseInt(vendorData.viewsCount) || 0,
           createdAt: new Date().toISOString()
         };
         const { error } = await supabase.from("vendors").insert([newVendor]);
@@ -771,18 +862,22 @@ export default function App() {
         const newProduct = {
           id: productData.id || `prod-${Date.now()}`,
           name: productData.name,
-          category: productData.category,
-          vendorId: productData.vendorId,
-          vendorName: productData.vendorName || "Verified Partner",
-          price: productData.price || "Contact for Quote",
-          priceModel: productData.priceModel || "Custom Quote",
-          trialPeriod: productData.trialPeriod || "No Trial",
-          rating: parseFloat(productData.rating) || 4.5,
-          approved: productData.approved || false,
-          featured: productData.featured || false,
           description: productData.description || "",
-          logo: productData.logo || "",
-          features: Array.isArray(productData.features) ? productData.features : [productData.features || ""],
+          images: Array.isArray(productData.images) && productData.images.length > 0 
+            ? productData.images 
+            : ["https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=500&auto=format&fit=crop&q=60"],
+          pricing: productData.pricing || "Contact for Quote",
+          features: Array.isArray(productData.features) ? productData.features : [],
+          brochureUrl: productData.brochureUrl || "#",
+          videoUrl: productData.videoUrl || "",
+          faqs: Array.isArray(productData.faqs) ? productData.faqs : [],
+          rating: parseFloat(productData.rating) || 4.5,
+          category: productData.category,
+          vendorId: productData.vendorId || "ven-1",
+          vendorName: productData.vendorName || "Verified Partner",
+          isFeatured: !!productData.isFeatured,
+          approved: productData.approved !== undefined ? !!productData.approved : false,
+          views: parseInt(productData.views) || 0,
           createdAt: new Date().toISOString()
         };
         const { error } = await supabase.from("products").insert([newProduct]);
@@ -1891,6 +1986,59 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Premium User Notification Toast */}
+      <AnimatePresence>
+        {userToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className={`fixed bottom-6 left-6 z-[100] max-w-sm w-full rounded-xl shadow-2xl border p-4 text-white flex items-start gap-3 backdrop-blur-md ${
+              userToast.type === "success" 
+                ? "bg-emerald-950/95 border-emerald-500/30 text-emerald-100" 
+                : userToast.type === "error" 
+                ? "bg-rose-950/95 border-rose-500/30 text-rose-100" 
+                : userToast.type === "warning" 
+                ? "bg-amber-950/95 border-amber-500/30 text-amber-100" 
+                : "bg-slate-900/95 border-slate-700/50 text-slate-100"
+            }`}
+          >
+            <div className={`p-2 rounded-lg ${
+              userToast.type === "success" 
+                ? "bg-emerald-500/20 text-emerald-400" 
+                : userToast.type === "error" 
+                ? "bg-rose-500/20 text-rose-400" 
+                : userToast.type === "warning" 
+                ? "bg-amber-500/20 text-amber-400" 
+                : "bg-blue-500/20 text-blue-400"
+            }`}>
+              {userToast.type === "success" && <CheckCircle className="w-5 h-5" />}
+              {userToast.type === "error" && <AlertCircle className="w-5 h-5" />}
+              {userToast.type === "warning" && <AlertTriangle className="w-5 h-5" />}
+              {userToast.type === "info" && <Info className="w-5 h-5" />}
+            </div>
+            
+            <div className="flex-1 space-y-0.5 pt-1.5">
+              <h4 className="font-extrabold text-xs tracking-wider uppercase opacity-80">
+                {userToast.type === "success" && "Success"}
+                {userToast.type === "error" && "Error Encountered"}
+                {userToast.type === "warning" && "Notice"}
+                {userToast.type === "info" && "Notification"}
+              </h4>
+              <p className="text-xs font-semibold leading-relaxed">{userToast.message}</p>
+            </div>
+
+            <button 
+              onClick={() => setUserToast(null)} 
+              className="text-white/60 hover:text-white transition-colors cursor-pointer pt-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
