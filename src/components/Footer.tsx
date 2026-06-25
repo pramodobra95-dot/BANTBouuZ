@@ -70,6 +70,12 @@ export default function Footer({ onNav, openSeoViewer }: FooterProps) {
       <div className="bg-slate-950/80 border-t border-slate-800/80 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <span>© 2026 BANTConfirm Marketplace Private Limited. All Rights Reserved.</span>
+          <div className="flex gap-4 items-center flex-wrap">
+            <button onClick={openSeoViewer} className="hover:text-white transition-colors cursor-pointer text-[11px] bg-slate-800 text-slate-400 py-1 px-2.5 rounded">
+              🇮🇳 India Sourcing Directory & Sitemap
+            </button>
+            <span className="text-[11px] text-slate-600">Google Top Search Optimised</span>
+          </div>
         </div>
       </div>
     </footer>
