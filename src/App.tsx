@@ -30,6 +30,25 @@ export default function App() {
   const [prefilledCategory, setPrefilledCategory] = useState<string | undefined>(undefined);
   const [vendorInitialTab, setVendorInitialTab] = useState<'dashboard' | 'products' | 'leads' | 'plans' | 'register' | undefined>(undefined);
 
+  // Real-time toast notification state
+  const [activeToast, setActiveToast] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    actionLabel?: string;
+    action?: () => void;
+  } | null>(null);
+
+  const showToastAlert = (title: string, message: string, action?: () => void, actionLabel = "Verify Now") => {
+    setActiveToast({
+      id: Math.random().toString(),
+      title,
+      message,
+      actionLabel,
+      action
+    });
+  };
+
   // Authentication State
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -251,6 +270,44 @@ export default function App() {
       setSignUpRole("buyer");
     }
   }, [signUpEmail]);
+
+  // Automated notification system & toast alert for administrators checking new vendor registration
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'admin') return;
+
+    let lastCheckedTime = new Date().toISOString();
+
+    const checkNewRegistrations = async () => {
+      try {
+        if (isSupabaseConfigured) {
+          const { data, error } = await supabase
+            .from("vendors")
+            .select("*")
+            .gt("createdAt", lastCheckedTime)
+            .eq("approved", false);
+
+          if (!error && data && data.length > 0) {
+            data.forEach((vendor: any) => {
+              showToastAlert(
+                `New Vendor Registration: ${vendor.companyName}`,
+                `${vendor.name || "A new vendor"} has applied and requires verification.`,
+                () => {
+                  setActiveTab("admin-panel");
+                }
+              );
+            });
+            lastCheckedTime = new Date().toISOString();
+            fetchAllData();
+          }
+        }
+      } catch (err) {
+        console.warn("Notification system fetch error:", err);
+      }
+    };
+
+    const interval = setInterval(checkNewRegistrations, 10000); // Poll every 10 seconds
+    return () => clearInterval(interval);
+  }, [currentUser, isSupabaseConfigured]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -543,16 +600,67 @@ export default function App() {
     }
   };
 
+  // Categories management (Add/Delete)
+  const handleAddCategory = async (catData: { name: string; description: string; icon: string }) => {
+    try {
+      if (isSupabaseConfigured) {
+        const catId = `cat-${Date.now()}`;
+        const newCat = {
+          id: catId,
+          name: catData.name,
+          description: catData.description,
+          icon: catData.icon || "Layers",
+          productsCount: 0
+        };
+        const { error } = await supabase.from("categories").insert([newCat]);
+        if (error) throw error;
+        fetchAllData();
+      } else {
+        const res = await fetch("/api/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(catData)
+        });
+        if (res.ok) fetchAllData();
+      }
+      safeAlert("Category created successfully!");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteCategory = async (catId: string) => {
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("categories").delete().eq("id", catId);
+        if (error) throw error;
+        fetchAllData();
+      } else {
+        const res = await fetch(`/api/categories/${catId}`, { method: "DELETE" });
+        if (res.ok) fetchAllData();
+      }
+      safeAlert("Category deleted successfully!");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // 3. Update Vendor profile plan
   const handleUpdateVendor = async (vendorId: string, updatedData: any) => {
     try {
-      const res = await fetch(`/api/vendors/${vendorId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedData)
-      });
-      if (res.ok) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("vendors").update(updatedData).eq("id", vendorId);
+        if (error) throw error;
         fetchAllData();
+      } else {
+        const res = await fetch(`/api/vendors/${vendorId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedData)
+        });
+        if (res.ok) {
+          fetchAllData();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -561,13 +669,42 @@ export default function App() {
 
   const handleAddVendor = async (vendorData: any) => {
     try {
-      const res = await fetch("/api/vendors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(vendorData)
-      });
-      if (res.ok) {
+      if (isSupabaseConfigured) {
+        const newVendor = {
+          id: vendorData.id || `ven-${Date.now()}`,
+          companyName: vendorData.companyName,
+          name: vendorData.name || "",
+          email: vendorData.email || "",
+          mobile: vendorData.mobile || "",
+          gstNumber: vendorData.gstNumber || "",
+          panNumber: vendorData.panNumber || "",
+          website: vendorData.website || "",
+          businessCategory: vendorData.businessCategory || "Custom Software Development",
+          location: vendorData.location || "India",
+          approved: vendorData.approved || false,
+          verified: vendorData.verified || false,
+          createdAt: new Date().toISOString()
+        };
+        const { error } = await supabase.from("vendors").insert([newVendor]);
+        if (error) throw error;
+        
+        showToastAlert(
+          `New Vendor Registered: ${newVendor.companyName}`,
+          `A new software provider (${newVendor.name}) has applied and requires verification.`,
+          () => {
+            setActiveTab("admin-panel");
+          }
+        );
         fetchAllData();
+      } else {
+        const res = await fetch("/api/vendors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vendorData)
+        });
+        if (res.ok) {
+          fetchAllData();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -576,11 +713,17 @@ export default function App() {
 
   const handleDeleteVendor = async (vendorId: string) => {
     try {
-      const res = await fetch(`/api/vendors/${vendorId}`, {
-        method: "DELETE"
-      });
-      if (res.ok) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("vendors").delete().eq("id", vendorId);
+        if (error) throw error;
         fetchAllData();
+      } else {
+        const res = await fetch(`/api/vendors/${vendorId}`, {
+          method: "DELETE"
+        });
+        if (res.ok) {
+          fetchAllData();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -589,12 +732,16 @@ export default function App() {
 
   const handleDeleteUser = async (userId: string) => {
     try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: "DELETE"
-      });
-      if (res.ok) {
+      if (isSupabaseConfigured) {
         safeAlert("User registration entry removed successfully!");
-        fetchAllData();
+      } else {
+        const res = await fetch(`/api/users/${userId}`, {
+          method: "DELETE"
+        });
+        if (res.ok) {
+          safeAlert("User registration entry removed successfully!");
+          fetchAllData();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -620,13 +767,36 @@ export default function App() {
   // 5. Vendor products management (Add/Update/Delete)
   const handleAddProduct = async (productData: any) => {
     try {
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productData)
-      });
-      if (res.ok) {
+      if (isSupabaseConfigured) {
+        const newProduct = {
+          id: productData.id || `prod-${Date.now()}`,
+          name: productData.name,
+          category: productData.category,
+          vendorId: productData.vendorId,
+          vendorName: productData.vendorName || "Verified Partner",
+          price: productData.price || "Contact for Quote",
+          priceModel: productData.priceModel || "Custom Quote",
+          trialPeriod: productData.trialPeriod || "No Trial",
+          rating: parseFloat(productData.rating) || 4.5,
+          approved: productData.approved || false,
+          featured: productData.featured || false,
+          description: productData.description || "",
+          logo: productData.logo || "",
+          features: Array.isArray(productData.features) ? productData.features : [productData.features || ""],
+          createdAt: new Date().toISOString()
+        };
+        const { error } = await supabase.from("products").insert([newProduct]);
+        if (error) throw error;
         fetchAllData();
+      } else {
+        const res = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(productData)
+        });
+        if (res.ok) {
+          fetchAllData();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -635,13 +805,19 @@ export default function App() {
 
   const handleUpdateProduct = async (productId: string, productData: any) => {
     try {
-      const res = await fetch(`/api/products/${productId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productData)
-      });
-      if (res.ok) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("products").update(productData).eq("id", productId);
+        if (error) throw error;
         fetchAllData();
+      } else {
+        const res = await fetch(`/api/products/${productId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(productData)
+        });
+        if (res.ok) {
+          fetchAllData();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -650,11 +826,17 @@ export default function App() {
 
   const handleDeleteProduct = async (productId: string) => {
     try {
-      const res = await fetch(`/api/products/${productId}`, {
-        method: "DELETE"
-      });
-      if (res.ok) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("products").delete().eq("id", productId);
+        if (error) throw error;
         fetchAllData();
+      } else {
+        const res = await fetch(`/api/products/${productId}`, {
+          method: "DELETE"
+        });
+        if (res.ok) {
+          fetchAllData();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -664,40 +846,72 @@ export default function App() {
   // Admin controls
   const handleApproveVendor = async (vendorId: string) => {
     try {
-      const res = await fetch(`/api/vendors/${vendorId}/approve`, { method: "POST" });
-      if (res.ok) fetchAllData();
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("vendors").update({ approved: true, verified: true }).eq("id", vendorId);
+        if (error) throw error;
+        fetchAllData();
+      } else {
+        const res = await fetch(`/api/vendors/${vendorId}/approve`, { method: "POST" });
+        if (res.ok) fetchAllData();
+      }
     } catch (err) { console.error(err); }
   };
 
   const handleApproveProduct = async (productId: string) => {
     try {
-      const res = await fetch(`/api/products/${productId}/approve`, { method: "POST" });
-      if (res.ok) fetchAllData();
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("products").update({ approved: true }).eq("id", productId);
+        if (error) throw error;
+        fetchAllData();
+      } else {
+        const res = await fetch(`/api/products/${productId}/approve`, { method: "POST" });
+        if (res.ok) fetchAllData();
+      }
     } catch (err) { console.error(err); }
   };
 
   const handleRejectProduct = async (productId: string) => {
     try {
-      const res = await fetch(`/api/products/${productId}/reject`, { method: "POST" });
-      if (res.ok) fetchAllData();
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("products").update({ approved: false }).eq("id", productId);
+        if (error) throw error;
+        fetchAllData();
+      } else {
+        const res = await fetch(`/api/products/${productId}/reject`, { method: "POST" });
+        if (res.ok) fetchAllData();
+      }
     } catch (err) { console.error(err); }
   };
 
   const handleToggleFeatureProduct = async (productId: string) => {
     try {
-      const res = await fetch(`/api/products/${productId}/feature`, { method: "POST" });
-      if (res.ok) fetchAllData();
+      const prod = products.find(p => p.id === productId);
+      const newFeatured = prod ? !prod.featured : true;
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("products").update({ featured: newFeatured }).eq("id", productId);
+        if (error) throw error;
+        fetchAllData();
+      } else {
+        const res = await fetch(`/api/products/${productId}/feature`, { method: "POST" });
+        if (res.ok) fetchAllData();
+      }
     } catch (err) { console.error(err); }
   };
 
   const handleAssignVendorToLead = async (leadId: string, vendorId: string) => {
     try {
-      const res = await fetch(`/api/leads/${leadId}/assign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vendorId })
-      });
-      if (res.ok) fetchAllData();
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("leads").update({ assignedVendorId: vendorId }).eq("id", leadId);
+        if (error) throw error;
+        fetchAllData();
+      } else {
+        const res = await fetch(`/api/leads/${leadId}/assign`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vendorId })
+        });
+        if (res.ok) fetchAllData();
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -1284,6 +1498,8 @@ export default function App() {
                   onDeleteVendor={handleDeleteVendor}
                   registeredUsers={registeredUsers}
                   onDeleteUser={handleDeleteUser}
+                  onAddCategory={handleAddCategory}
+                  onDeleteCategory={handleDeleteCategory}
                 />
               </motion.div>
             )}
@@ -1372,13 +1588,7 @@ export default function App() {
                 <BecomePartnerView
                   onRegisterSuccess={(data) => {
                     setCurrentUser(data.user);
-                    // Fetch latest vendors and users to sync UI immediately
-                    fetch("/api/vendors")
-                      .then(r => r.json())
-                      .then(vData => setVendors(Array.isArray(vData) ? vData : []));
-                    fetch("/api/users")
-                      .then(r => r.json())
-                      .then(uData => setRegisteredUsers(Array.isArray(uData) ? uData : []));
+                    fetchAllData();
                   }}
                   onNavigateToTab={(tab, subTab) => {
                     if (subTab) {
@@ -1641,6 +1851,46 @@ export default function App() {
         }} 
         openSeoViewer={() => setSeoViewerOpen(true)}
       />
+
+      {/* Real-time Administrator Toast Alert */}
+      {activeToast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700/50 p-4 animate-bounce-short">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-blue-600/20 text-blue-400 rounded-lg">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <h4 className="font-bold text-xs text-white">{activeToast.title}</h4>
+              <p className="text-[11px] text-slate-300 leading-normal">{activeToast.message}</p>
+              {activeToast.action && (
+                <div className="pt-2 flex gap-2">
+                  <button
+                    onClick={() => {
+                      activeToast.action?.();
+                      setActiveToast(null);
+                    }}
+                    className="px-2.5 py-1 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                  >
+                    {activeToast.actionLabel || "Verify Now"}
+                  </button>
+                  <button
+                    onClick={() => setActiveToast(null)}
+                    className="px-2.5 py-1 text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+            <button 
+              onClick={() => setActiveToast(null)} 
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

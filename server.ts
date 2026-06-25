@@ -1345,6 +1345,7 @@ const sendVendorRegisterAdminAlert = async (vendor: any) => {
     `
   );
   await sendResendEmail("admin@bantconfirm.com", `ADMIN ALERT: New Vendor Registration - ${vendor.companyName}`, html);
+  await sendResendEmail("info.bouuz@gmail.com", `ADMIN ALERT: New Vendor Registration - ${vendor.companyName}`, html);
 };
 
 // Lead status change notifications
@@ -1659,6 +1660,17 @@ app.post("/api/categories", (req, res) => {
   db.categories.push(newCat);
   saveDb();
   res.status(201).json(newCat);
+});
+
+app.delete("/api/categories/:id", (req, res) => {
+  const idx = db.categories.findIndex(c => c.id === req.params.id);
+  if (idx !== -1) {
+    const deleted = db.categories.splice(idx, 1)[0];
+    saveDb();
+    res.json(deleted);
+  } else {
+    res.status(404).json({ error: "Category not found" });
+  }
 });
 
 // Products API

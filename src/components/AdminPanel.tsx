@@ -37,6 +37,8 @@ interface AdminPanelProps {
   onDeleteVendor?: (vendorId: string) => void;
   registeredUsers?: any[];
   onDeleteUser?: (userId: string) => void;
+  onAddCategory?: (catData: { name: string; description: string; icon: string }) => void;
+  onDeleteCategory?: (categoryId: string) => void;
 }
 
 export default function AdminPanel({
@@ -64,9 +66,11 @@ export default function AdminPanel({
   onUpdateVendor,
   onDeleteVendor,
   registeredUsers = [],
-  onDeleteUser
+  onDeleteUser,
+  onAddCategory,
+  onDeleteCategory
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'vendors' | 'products' | 'leads' | 'banners' | 'blogs' | 'cms' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'vendors' | 'products' | 'leads' | 'banners' | 'blogs' | 'cms' | 'users' | 'categories'>('overview');
 
   // Product addition and editing form state
   const [showProductForm, setShowProductForm] = useState(false);
@@ -500,6 +504,14 @@ export default function AdminPanel({
             }`}
           >
             CMS Copy
+          </button>
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`px-3 py-2 rounded-md cursor-pointer transition-all shrink-0 ${
+              activeTab === 'categories' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Categories ({categories.length})
           </button>
         </div>
       </div>
@@ -1856,6 +1868,145 @@ export default function AdminPanel({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. CATEGORIES MANAGEMENT TAB */}
+      {activeTab === 'categories' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white rounded-xl border border-slate-200 p-5 shadow-xs gap-4">
+            <div>
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Categories Manager</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Define the marketplace taxonomies, add new software categories, and prune unused ones.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100">
+                Active Categories: {categories.length}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left: Add New Category Form */}
+            <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+              <h4 className="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-2">
+                <PlusCircle className="w-4 h-4 text-emerald-500" />
+                Add New Category
+              </h4>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const name = (form.elements.namedItem("catName") as HTMLInputElement).value;
+                const description = (form.elements.namedItem("catDesc") as HTMLTextAreaElement).value;
+                const icon = (form.elements.namedItem("catIcon") as HTMLInputElement).value || "Layers";
+                
+                if (!name) {
+                  safeAlert("Category Name is required!");
+                  return;
+                }
+
+                if (onAddCategory) {
+                  onAddCategory({ name, description, icon });
+                  form.reset();
+                }
+              }} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Category Name *</label>
+                  <input
+                    type="text"
+                    name="catName"
+                    placeholder="e.g. ERP Systems"
+                    required
+                    className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Icon Class Name</label>
+                  <input
+                    type="text"
+                    name="catIcon"
+                    placeholder="e.g. Layers, ShoppingBag, Database"
+                    defaultValue="Layers"
+                    className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Available Lucide icons list includes: Layers, ShoppingBag, Database, Users, Calendar, BarChart.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Short Description</label>
+                  <textarea
+                    name="catDesc"
+                    rows={3}
+                    placeholder="Brief overview of the category offerings..."
+                    className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2 px-4 rounded-lg shadow-sm transition-colors cursor-pointer"
+                >
+                  Create Category
+                </button>
+              </form>
+            </div>
+
+            {/* Right: Category List */}
+            <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+              <h4 className="font-black text-slate-800 text-xs uppercase tracking-wider">Existing Taxonomies</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-400 font-extrabold border-b border-slate-100 select-none text-[10px] uppercase tracking-wider">
+                      <th className="p-3">Category info</th>
+                      <th className="p-3">Icon</th>
+                      <th className="p-3">Products Count</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {categories.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center p-8 text-slate-400">
+                          No categories found. Create one on the left.
+                        </td>
+                      </tr>
+                    ) : (
+                      categories.map((c) => (
+                        <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="p-3">
+                            <p className="font-extrabold text-slate-800 text-xs">{c.name}</p>
+                            <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">{c.description || "No description provided."}</p>
+                            <p className="text-[9px] text-slate-300 font-mono select-all">ID: {c.id}</p>
+                          </td>
+                          <td className="p-3">
+                            <span className="font-mono text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded text-[10px]">
+                              {c.icon}
+                            </span>
+                          </td>
+                          <td className="p-3 font-semibold text-slate-800">
+                            {c.productsCount || 0}
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete the "${c.name}" category?`)) {
+                                  if (onDeleteCategory) onDeleteCategory(c.id);
+                                }
+                              }}
+                              className="text-rose-600 hover:text-rose-900 font-bold text-[11px] p-1.5 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4 inline" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
