@@ -110,6 +110,7 @@ export interface Blog {
   author: string;
   readTime: string;
   slug: string;
+  likes?: number;
   createdAt: string;
 }
 

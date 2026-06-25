@@ -322,6 +322,21 @@ export default function AdminPanel({
     author: "BANTConfirm Editorial"
   });
 
+  const handleBlogImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!["image/jpeg", "image/png", "image/jpg"].includes(file.type)) {
+        safeAlert("Only JPEG and PNG format images are allowed for SEO Blog manual guidelines.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBlogForm(prev => ({ ...prev, image: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleBannerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onAddBanner(bannerForm);
@@ -1615,6 +1630,23 @@ export default function AdminPanel({
                     placeholder="e.g. Odoo, ERP, SME scale"
                     className="w-full bg-white border rounded p-1.5"
                   />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-slate-500 mb-1">Article Header Image (JPEG/PNG format) *</label>
+                  <div className="flex items-center gap-3 bg-white p-2 border rounded">
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/jpg"
+                      onChange={handleBlogImageUpload}
+                      className="text-xs text-slate-500 file:mr-3 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-[#0066FF] hover:file:bg-blue-100 cursor-pointer"
+                    />
+                    {blogForm.image && (
+                      <div className="relative w-12 h-12 rounded border overflow-hidden shrink-0">
+                        <img src={blogForm.image} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Select a PNG or JPEG image from your computer to represent this manual.</p>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-slate-500 mb-1">Dynamic Content Body (Markdown format supported) *</label>

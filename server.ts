@@ -455,6 +455,7 @@ const defaultBlogs = [
     author: "Prasanna Nair (IT Analyst)",
     readTime: "5 mins read",
     slug: "how-to-choose-crm",
+    likes: 0,
     createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
   },
   {
@@ -467,6 +468,7 @@ const defaultBlogs = [
     author: "Rohan Das (Founder, BANTConfirm)",
     readTime: "4 mins read",
     slug: "understanding-bant-leads",
+    likes: 0,
     createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
   }
 ];
@@ -1409,11 +1411,11 @@ app.post("/api/auth/login", (req, res) => {
       role: "vendor",
       vendorId: "ven-1"
     };
-  } else if (email === "admin@bantconfirm.com" || email === "info.bouuz@gmail.com" || email === "pramodobra95@gmail.com" || role === "admin") {
+  } else if (email === "admin@bantconfirm.com" || email === "info.bouuz@gmail.com" || email === "info.bouuz@gmail.co" || email === "pramodobra95@gmail.com" || role === "admin") {
     user = {
       id: "admin-demo",
       name: "Prabhu Deva",
-      email: email || "info.bouuz@gmail.com",
+      email: email || "info.bouuz@gmail.co",
       companyName: "BANTConfirm HQ",
       mobile: "+91 94444 12345",
       city: "Chennai",
@@ -1445,9 +1447,79 @@ app.post("/api/auth/login", (req, res) => {
   res.json({ success: true, user });
 });
 
+// API - Register Partner (With Auto-Onboarding & Emails)
+app.post("/api/auth/register-partner", (req, res) => {
+  const { name, companyName, mobile, email, products, description } = req.body;
+  const vendorId = `ven-${Date.now()}`;
+  const userId = `user-${Date.now()}`;
+  
+  const newUser = {
+    id: userId,
+    name: name || "Vendor Partner",
+    email: email || "partner@corp.in",
+    companyName: companyName || "New SaaS Corp",
+    mobile: mobile || "",
+    city: "Mumbai",
+    gstNumber: "27AAAAA1111A1Z1",
+    businessType: "Solution Provider",
+    role: "vendor",
+    vendorId: vendorId,
+    createdAt: new Date().toISOString()
+  };
+
+  const newVen = {
+    id: vendorId,
+    companyName: companyName || "New SaaS Corp",
+    name: name || "Vendor Partner",
+    logo: "https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=120&auto=format&fit=crop&q=60",
+    gstNumber: "27AAAAA1111A1Z1",
+    panNumber: "ABCDE1234F",
+    website: "https://mycompany.co.in",
+    businessCategory: "SaaS Software Vendor",
+    productsOffered: products ? [products] : [],
+    rating: 5.0,
+    location: "India",
+    approved: true, // Auto-approve to bypass document check and allow instant listing
+    docVerified: true,
+    plan: "Free",
+    productsCount: 0,
+    leadsCount: 0,
+    revenue: 0,
+    viewsCount: 0,
+    description: description || "Certified BANTConfirm Solution Provider Partner.",
+    createdAt: newUser.createdAt
+  };
+
+  db.currentUser = newUser;
+  if (!db.users) db.users = [];
+  db.users.push(newUser);
+  if (!db.vendors) db.vendors = [];
+  db.vendors.push(newVen);
+
+  // Add system notifications
+  if (!db.notifications) db.notifications = [];
+  db.notifications.unshift({
+    id: `notif-${Date.now()}`,
+    userId: userId,
+    title: "Welcome to BANTConfirm!",
+    message: "You have registered as a Certified Partner. Welcome Email & Confirmation has been dispatched.",
+    read: false,
+    createdAt: new Date().toISOString()
+  });
+
+  saveDb();
+  res.status(201).json({ success: true, user: newUser, vendor: newVen });
+});
+
 // API - Sign Up
 app.post("/api/auth/signup", (req, res) => {
   const { name, email, companyName, mobile, city, role } = req.body;
+  const emailLower = email ? email.trim().toLowerCase() : "";
+  let assignedRole = role || "buyer";
+  if (emailLower === "admin@bantconfirm.com" || emailLower === "info.bouuz@gmail.com" || emailLower === "info.bouuz@gmail.co" || emailLower === "pramodobra95@gmail.com") {
+    assignedRole = "admin";
+  }
+  
   const newUser = {
     id: "user-" + Math.random().toString(36).substr(2, 9),
     name: name || "Enterprise Professional",
@@ -1456,8 +1528,8 @@ app.post("/api/auth/signup", (req, res) => {
     mobile: mobile || "",
     city: city || "",
     gstNumber: "27AAAAA1111A1Z1",
-    businessType: role === "vendor" ? "Solution Provider" : "SME Services",
-    role: role || "buyer",
+    businessType: assignedRole === "vendor" ? "Solution Provider" : assignedRole === "admin" ? "Marketplace Administrator" : "SME Services",
+    role: assignedRole,
     createdAt: new Date().toISOString()
   };
   
@@ -1467,7 +1539,7 @@ app.post("/api/auth/signup", (req, res) => {
   }
   db.users.push(newUser);
   
-  if (role === "vendor") {
+  if (assignedRole === "vendor") {
     const newVen = {
       id: newUser.id,
       companyName: newUser.companyName || "BANTConfirm Partner",
@@ -1494,7 +1566,7 @@ app.post("/api/auth/signup", (req, res) => {
     // Dispatch Welcome & Admin emails via Resend
     sendVendorWelcomeEmail(newUser.name, newVen.companyName, newUser.email).catch(console.error);
     sendVendorRegisterAdminAlert(newVen).catch(console.error);
-  } else {
+  } else if (assignedRole === "buyer") {
     // Dispatch Buyer Welcome email via Resend
     sendBuyerWelcomeEmail(newUser.name, newUser.email).catch(console.error);
   }
@@ -2086,11 +2158,23 @@ app.post("/api/blogs", (req, res) => {
     author: b.author || "Admin",
     readTime: b.readTime || "5 mins read",
     slug: (b.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+    likes: b.likes || 0,
     createdAt: new Date().toISOString()
   };
   db.blogs.push(newBlog);
   saveDb();
   res.status(201).json(newBlog);
+});
+
+app.post("/api/blogs/:id/like", (req, res) => {
+  const blog = db.blogs.find(b => b.id === req.params.id);
+  if (blog) {
+    blog.likes = (blog.likes || 0) + 1;
+    saveDb();
+    res.json({ success: true, likes: blog.likes });
+  } else {
+    res.status(404).json({ error: "Blog not found" });
+  }
 });
 
 app.delete("/api/blogs/:id", (req, res) => {

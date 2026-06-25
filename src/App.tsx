@@ -3,13 +3,15 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   ShieldAlert, Settings, Eye, HelpCircle, Phone, 
   MapPin, Globe, CheckCircle, List, ArrowRight, UserCheck, 
-  Sparkles, Award, Shield, FileText, User, Lock, Mail, Building, LogOut
+  Sparkles, Award, Shield, FileText, User, Lock, Mail, Building, LogOut,
+  Menu, X
 } from "lucide-react";
 import HomeView from "./components/HomeView";
 import UserPanel from "./components/UserPanel";
 import VendorPanel from "./components/VendorPanel";
 import AdminPanel from "./components/AdminPanel";
 import BlogsView from "./components/BlogsView";
+import BecomePartnerView from "./components/BecomePartnerView";
 import AIChatBot from "./components/AIChatBot";
 import Footer from "./components/Footer";
 import SEOViewer from "./components/SEOViewer";
@@ -24,7 +26,9 @@ export default function App() {
   // Current simulating role & navigation tabs
   const [currentRole, setCurrentRole] = useState<'buyer' | 'vendor' | 'admin'>('buyer');
   const [activeTab, setActiveTab] = useState<string>('home');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [prefilledCategory, setPrefilledCategory] = useState<string | undefined>(undefined);
+  const [vendorInitialTab, setVendorInitialTab] = useState<'dashboard' | 'products' | 'leads' | 'plans' | 'register' | undefined>(undefined);
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -43,7 +47,7 @@ export default function App() {
   const [signUpCompany, setSignUpCompany] = useState("");
   const [signUpMobile, setSignUpMobile] = useState("");
   const [signUpCity, setSignUpCity] = useState("");
-  const [signUpRole, setSignUpRole] = useState<'buyer' | 'vendor'>('buyer');
+  const [signUpRole, setSignUpRole] = useState<'buyer' | 'vendor' | 'admin'>('buyer');
 
   // Wishlist state
   const [wishlist, setWishlist] = useState<string[]>(() => {
@@ -222,14 +226,26 @@ export default function App() {
   // Auto-detect role from email to simplify login
   useEffect(() => {
     const emailLower = authEmail.trim().toLowerCase();
-    if (emailLower === "admin@bantconfirm.com" || emailLower === "info.bouuz@gmail.com" || emailLower === "pramodobra95@gmail.com") {
+    if (emailLower === "admin@bantconfirm.com" || emailLower === "info.bouuz@gmail.com" || emailLower === "info.bouuz@gmail.co" || emailLower === "pramodobra95@gmail.com") {
       setAuthRole("admin");
-    } else if (emailLower.includes("vendor") || emailLower === "vendor@bantconfirm.com") {
+    } else if (emailLower.includes("vendor") || emailLower === "vendor@bantconfirm.com" || emailLower.includes("seller") || emailLower.includes("partner") || emailLower.includes("provider")) {
       setAuthRole("vendor");
     } else {
       setAuthRole("buyer");
     }
   }, [authEmail]);
+
+  // Auto-detect role from signup email to simplify registration
+  useEffect(() => {
+    const emailLower = signUpEmail.trim().toLowerCase();
+    if (emailLower === "admin@bantconfirm.com" || emailLower === "info.bouuz@gmail.com" || emailLower === "info.bouuz@gmail.co" || emailLower === "pramodobra95@gmail.com") {
+      setSignUpRole("admin");
+    } else if (emailLower.includes("vendor") || emailLower === "vendor@bantconfirm.com" || emailLower.includes("seller") || emailLower.includes("partner") || emailLower.includes("provider")) {
+      setSignUpRole("vendor");
+    } else {
+      setSignUpRole("buyer");
+    }
+  }, [signUpEmail]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -395,6 +411,8 @@ export default function App() {
             setActiveTab('dashboard');
           } else if (signUpRole === 'vendor') {
             setActiveTab('vendor-panel');
+          } else if (signUpRole === 'admin') {
+            setActiveTab('admin-panel');
           }
           fetchAllData();
         }
@@ -429,6 +447,8 @@ export default function App() {
             setActiveTab('dashboard');
           } else if (data.user.role === 'vendor') {
             setActiveTab('vendor-panel');
+          } else if (data.user.role === 'admin') {
+            setActiveTab('admin-panel');
           }
           fetchAllData();
         } else {
@@ -695,6 +715,13 @@ export default function App() {
     } catch (err) { console.error(err); }
   };
 
+  const handleLikeBlog = async (blogId: string) => {
+    try {
+      const res = await fetch(`/api/blogs/${blogId}/like`, { method: "POST" });
+      if (res.ok) fetchAllData();
+    } catch (err) { console.error(err); }
+  };
+
   const handleDeleteBlog = async (blogId: string) => {
     try {
       const res = await fetch(`/api/blogs/${blogId}`, { method: "DELETE" });
@@ -777,10 +804,11 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-800">
       
       {/* CORE PLATFORM HEADER */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm px-8 py-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm px-4 md:px-8 py-3 md:py-4 flex flex-row items-center justify-between gap-4">
+        {/* Left side: Logo */}
         <div 
-          onClick={() => { setActiveTab('home'); }}
-          className="flex items-center gap-2 cursor-pointer self-start select-none group"
+          onClick={() => { setActiveTab('home'); setMobileMenuOpen(false); }}
+          className="flex items-center gap-2 cursor-pointer select-none group"
         >
           <div className="w-8 h-8 bg-[#FFC107] rounded flex items-center justify-center font-black text-slate-900 text-lg shadow-sm transition-transform group-hover:scale-105 duration-300">B</div>
           <span className="text-xl font-black tracking-tight">
@@ -789,8 +817,8 @@ export default function App() {
           </span>
         </div>
 
-        {/* Global Nav tabs */}
-        <nav className="flex flex-wrap items-center gap-1 text-sm font-medium text-slate-600">
+        {/* Center: Global Nav tabs (Desktop Only) */}
+        <nav className="hidden md:flex items-center gap-1 text-sm font-medium text-slate-600">
           <button 
             onClick={() => setActiveTab('home')}
             className={`px-3 py-1.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'home' ? 'text-[#0066FF] bg-blue-50/80 font-bold' : 'hover:text-[#0066FF]'}`}
@@ -800,7 +828,7 @@ export default function App() {
           
           <button 
             onClick={() => handleTabClick('vendor-panel', 'vendor')}
-            className={`px-3 py-1.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'vendor-panel' ? 'text-[#0066FF] bg-blue-50/80 font-bold' : 'hover:text-[#0066FF]'}`}
+            className={`hidden px-3 py-1.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'vendor-panel' ? 'text-[#0066FF] bg-blue-50/80 font-bold' : 'hover:text-[#0066FF]'}`}
           >
             Vendors
           </button>
@@ -814,7 +842,7 @@ export default function App() {
           
           <button 
             onClick={() => setActiveTab('blogs')}
-            className={`px-3 py-1.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'blogs' ? 'text-[#0066FF] bg-blue-50/80 font-bold' : 'hover:text-[#0066FF]'}`}
+            className={`hidden px-3 py-1.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'blogs' ? 'text-[#0066FF] bg-blue-50/80 font-bold' : 'hover:text-[#0066FF]'}`}
           >
             Resources
           </button>
@@ -829,8 +857,8 @@ export default function App() {
           )}
         </nav>
 
-        {/* Action, Sourcing & Auth Section */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Right side: Action, Sourcing & Auth Section (Desktop Only) */}
+        <div className="hidden md:flex items-center gap-3">
           <button
             onClick={() => {
               if (!currentUser) {
@@ -845,7 +873,7 @@ export default function App() {
             Post Requirement
           </button>
 
-          <div className="h-6 w-[1px] bg-slate-200 hidden sm:block" />
+          <div className="h-6 w-[1px] bg-slate-200" />
 
           {/* Unified Authentication UI */}
           {!currentUser ? (
@@ -890,7 +918,140 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {/* Mobile Hamburger Button (Mobile Only) */}
+        <div className="md:hidden flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (!currentUser) {
+                setAuthModalTab('login');
+                setAuthModalOpen(true);
+              } else {
+                handleNavigateToPostRequirement();
+              }
+            }}
+            className="bg-[#FFC107] hover:bg-yellow-500 text-slate-900 text-[10px] font-black px-3 py-1.5 rounded-lg shadow-xs cursor-pointer transition-all animate-pulse"
+          >
+            Post Req
+          </button>
+          
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg focus:outline-none transition-colors cursor-pointer"
+            id="mobile-menu-toggle-btn"
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </header>
+
+      {/* MOBILE NAV DROPDOWN MENU */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="md:hidden bg-white border-b border-slate-200 overflow-hidden shadow-md z-30 sticky top-[57px]"
+          >
+            <div className="px-4 py-4 flex flex-col gap-4">
+              {/* Navigation Links */}
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => { setActiveTab('home'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'home' ? 'text-[#0066FF] bg-blue-50 font-bold' : 'hover:text-[#0066FF] hover:bg-slate-50'}`}
+                >
+                  Solutions
+                </button>
+                
+                <button 
+                  onClick={() => { handleTabClick('vendor-panel', 'vendor'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'vendor-panel' ? 'text-[#0066FF] bg-blue-50 font-bold' : 'hover:text-[#0066FF] hover:bg-slate-50'}`}
+                >
+                  Vendors
+                </button>
+                
+                <button 
+                  onClick={() => { handleTabClick('dashboard', 'buyer'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'dashboard' ? 'text-[#0066FF] bg-blue-50 font-bold' : 'hover:text-[#0066FF] hover:bg-slate-50'}`}
+                >
+                  BANT Sourcing Panel
+                </button>
+                
+                <button 
+                  onClick={() => { setActiveTab('blogs'); setMobileMenuOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg cursor-pointer font-bold transition-all ${activeTab === 'blogs' ? 'text-[#0066FF] bg-blue-50 font-bold' : 'hover:text-[#0066FF] hover:bg-slate-50'}`}
+                >
+                  Resources
+                </button>
+
+                {currentUser?.role === 'admin' && (
+                  <button 
+                    onClick={() => { handleTabClick('admin-panel', 'admin'); setMobileMenuOpen(false); }}
+                    className={`w-full text-left px-4 py-2.5 rounded-lg cursor-pointer font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 transition-all ${activeTab === 'admin-panel' ? 'ring-2 ring-purple-400 font-extrabold' : ''}`}
+                  >
+                    Admin Desk
+                  </button>
+                )}
+              </div>
+
+              <div className="h-[1px] bg-slate-100 w-full" />
+
+              {/* Sourcing & Auth section */}
+              <div className="flex flex-col gap-3">
+                {!currentUser ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => {
+                        setAuthModalTab('login');
+                        setAuthModalOpen(true);
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full text-center border border-slate-200 text-[#0066FF] hover:bg-blue-50 font-bold py-2.5 rounded-lg text-sm transition-all cursor-pointer"
+                    >
+                      Login
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setAuthModalTab('signup');
+                        setAuthModalOpen(true);
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full text-center bg-[#0066FF] hover:bg-blue-700 text-white font-extrabold py-2.5 rounded-lg text-sm transition-all cursor-pointer shadow-xs"
+                    >
+                      Sign Up
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 p-3 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-extrabold flex items-center justify-center text-sm">
+                        {currentUser.name ? currentUser.name[0].toUpperCase() : 'U'}
+                      </div>
+                      <div className="text-left leading-none">
+                        <div className="text-xs font-black text-slate-800 leading-tight">{currentUser.name}</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">{currentUser.role}</div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        handleLogout();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="text-slate-500 hover:text-red-600 transition-all cursor-pointer p-2 hover:bg-slate-100 rounded-lg flex items-center gap-2 text-xs font-bold"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* RENDER DYNAMIC ROUTE CHANNELS */}
       <main className="flex-1">
@@ -928,6 +1089,7 @@ export default function App() {
                   }}
                   onAddToWishlist={handleAddToWishlist}
                   wishlist={wishlist}
+                  onLikeBlog={handleLikeBlog}
                 />
               </motion.div>
             )}
@@ -941,7 +1103,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                <BlogsView blogs={blogs} />
+                <BlogsView blogs={blogs} onLikeBlog={handleLikeBlog} />
               </motion.div>
             )}
 
@@ -1051,6 +1213,7 @@ export default function App() {
                     onClaimLead={handleClaimLead}
                     onUpdateLeadAssignmentStatus={handleUpdateLeadAssignmentStatus}
                     onUpdateProfile={handleUpdateProfile}
+                    initialActiveTab={vendorInitialTab}
                   />
                 ) : (
                   <div className="max-w-md mx-auto my-12 bg-white rounded-2xl shadow-xl p-8 text-center border border-slate-100">
@@ -1182,6 +1345,38 @@ export default function App() {
               </motion.div>
             )}
 
+            {/* Become Partner view */}
+            {activeTab === 'become-partner' && (
+              <motion.div
+                key="become-partner"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <BecomePartnerView
+                  onRegisterSuccess={(data) => {
+                    setCurrentUser(data.user);
+                    // Fetch latest vendors and users to sync UI immediately
+                    fetch("/api/vendors")
+                      .then(r => r.json())
+                      .then(vData => setVendors(Array.isArray(vData) ? vData : []));
+                    fetch("/api/users")
+                      .then(r => r.json())
+                      .then(uData => setRegisteredUsers(Array.isArray(uData) ? uData : []));
+                  }}
+                  onNavigateToTab={(tab, subTab) => {
+                    if (subTab) {
+                      setVendorInitialTab(subTab as any);
+                    } else {
+                      setVendorInitialTab(undefined);
+                    }
+                    setActiveTab(tab);
+                  }}
+                />
+              </motion.div>
+            )}
+
             {/* Static Contact page */}
             {activeTab === 'contact' && (
               <motion.div
@@ -1284,13 +1479,7 @@ export default function App() {
                     <input 
                       type="email" 
                       required
-                      placeholder={
-                        authRole === "admin" 
-                          ? "info.bouuz@gmail.com" 
-                          : authRole === "vendor" 
-                          ? "vendor@bantconfirm.com" 
-                          : "buyer@bantconfirm.com"
-                      } 
+                      placeholder="e.g. info.bouuz@gmail.co" 
                       value={authEmail}
                       onChange={(e) => setAuthEmail(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-blue-500 outline-hidden"
@@ -1324,7 +1513,7 @@ export default function App() {
                 </form>
               ) : (
                 <form onSubmit={handleSignUpSubmit} className="space-y-3">
-                  <div className="space-y-1">
+                  <div className="space-y-1 hidden">
                     <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Desired Profile Role</label>
                     <div className="grid grid-cols-2 gap-2">
                       <button

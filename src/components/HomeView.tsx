@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Search, Shield, Layers, Users, Star, ArrowRight, Phone, MessageSquare, 
   ChevronLeft, ChevronRight, FileText, Download, Play, CheckCircle, 
-  HelpCircle, Calendar, Award, CheckSquare, Zap, ExternalLink 
+  HelpCircle, Calendar, Award, CheckSquare, Zap, ExternalLink, Heart
 } from "lucide-react";
 import { Category, Product, Vendor, Blog, Banner, Testimonial } from "../types";
 import { safeAlert } from "../utils/safeAlert";
@@ -19,6 +19,7 @@ interface HomeViewProps {
   onNavigateToTab: (tab: string) => void;
   onAddToWishlist: (productId: string) => void;
   wishlist: string[];
+  onLikeBlog?: (blogId: string) => void;
 }
 
 const LOCAL_FALLBACK_TESTIMONIALS: Testimonial[] = [
@@ -79,7 +80,8 @@ export default function HomeView({
   onNavigateToPostRequirement,
   onNavigateToTab,
   onAddToWishlist,
-  wishlist
+  wishlist,
+  onLikeBlog
 }: HomeViewProps) {
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -880,11 +882,24 @@ export default function HomeView({
               </div>
               <div className="p-4 flex-1 flex flex-col justify-between space-y-2">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-[10px] bg-blue-50 text-[#0066FF] font-bold px-2 py-0.5 rounded">
                       {blog.category}
                     </span>
-                    <span className="text-[10px] text-slate-400">{blog.readTime}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onLikeBlog) onLikeBlog(blog.id);
+                        }}
+                        className="inline-flex items-center gap-1 text-rose-500 hover:text-rose-700 bg-rose-50/50 hover:bg-rose-50 px-2 py-0.5 rounded transition-all cursor-pointer font-bold active:scale-90"
+                        title="Love this article"
+                      >
+                        <Heart className="w-3 h-3 fill-rose-500" />
+                        <span>{blog.likes || 0}</span>
+                      </button>
+                      <span className="text-[10px] text-slate-400">{blog.readTime}</span>
+                    </div>
                   </div>
                   <h4 className="font-bold text-xs text-slate-800 mt-2 line-clamp-2 group-hover:text-[#0066FF] transition-colors">
                     {blog.title}
@@ -925,6 +940,8 @@ export default function HomeView({
           </div>
         </div>
       </div>
+
+      {/* 10. BECOME A PARTNER SECTION REMOVED FROM HOME PAGE TO MEET USER TARGET */}
 
       {/* PRODUCT DETAILS MODAL */}
       {selectedProduct && (

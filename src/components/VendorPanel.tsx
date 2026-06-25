@@ -24,6 +24,7 @@ interface VendorPanelProps {
   onClaimLead: (leadId: string, vendorId: string) => void;
   onUpdateLeadAssignmentStatus: (leadId: string, vendorId: string, status: string) => void;
   onUpdateProfile?: (profileData: any) => void;
+  initialActiveTab?: 'dashboard' | 'products' | 'leads' | 'plans' | 'register';
 }
 
 export default function VendorPanel({
@@ -39,19 +40,22 @@ export default function VendorPanel({
   onDeleteProduct,
   onClaimLead,
   onUpdateLeadAssignmentStatus,
-  onUpdateProfile
+  onUpdateProfile,
+  initialActiveTab
 }: VendorPanelProps) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'leads' | 'plans' | 'register'>(
-    vendorProfile ? 'dashboard' : 'register'
+    initialActiveTab || (vendorProfile ? 'dashboard' : 'register')
   );
 
   React.useEffect(() => {
-    if (vendorProfile) {
+    if (initialActiveTab) {
+      setActiveTab(initialActiveTab);
+    } else if (vendorProfile) {
       setActiveTab('dashboard');
     } else {
       setActiveTab('register');
     }
-  }, [vendorProfile]);
+  }, [vendorProfile, initialActiveTab]);
 
   // Registration Form State
   const [registerForm, setRegisterForm] = useState({
@@ -228,12 +232,12 @@ export default function VendorPanel({
         </div>
 
         {/* Tab switchers */}
-        <div className="flex bg-slate-100 p-1 rounded-lg self-start text-xs font-semibold">
+        <div className="flex bg-slate-100 p-1 rounded-lg self-start text-xs font-semibold overflow-x-auto max-w-full whitespace-nowrap scrollbar-none">
           {activeVendor.approved ? (
             <>
               <button
                 onClick={() => setActiveTab('dashboard')}
-                className={`px-4 py-2 rounded-md cursor-pointer transition-all ${
+                className={`px-4 py-2 rounded-md cursor-pointer transition-all shrink-0 ${
                   activeTab === 'dashboard' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -241,7 +245,7 @@ export default function VendorPanel({
               </button>
               <button
                 onClick={() => setActiveTab('products')}
-                className={`px-4 py-2 rounded-md cursor-pointer transition-all ${
+                className={`px-4 py-2 rounded-md cursor-pointer transition-all shrink-0 ${
                   activeTab === 'products' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -249,7 +253,7 @@ export default function VendorPanel({
               </button>
               <button
                 onClick={() => setActiveTab('leads')}
-                className={`px-4 py-2 rounded-md cursor-pointer transition-all ${
+                className={`px-4 py-2 rounded-md cursor-pointer transition-all shrink-0 ${
                   activeTab === 'leads' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -257,7 +261,7 @@ export default function VendorPanel({
               </button>
               <button
                 onClick={() => setActiveTab('plans')}
-                className={`px-4 py-2 rounded-md cursor-pointer transition-all ${
+                className={`px-4 py-2 rounded-md cursor-pointer transition-all shrink-0 ${
                   activeTab === 'plans' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >

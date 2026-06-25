@@ -45,6 +45,7 @@ export default function Footer({ onNav, openSeoViewer }: FooterProps) {
             <li><button onClick={() => onNav("contact")} className="hover:text-white transition-colors cursor-pointer text-left">Contact Us / Support</button></li>
             <li><button onClick={() => onNav("terms")} className="hover:text-white transition-colors cursor-pointer text-left">Terms of Service</button></li>
             <li><button onClick={() => onNav("privacy")} className="hover:text-white transition-colors cursor-pointer text-left">Privacy Policy</button></li>
+            <li><button onClick={() => onNav("become-partner")} className="hover:text-blue-300 text-blue-400 font-extrabold transition-colors cursor-pointer text-left">Become a Partner & FAQ Hub</button></li>
             <li><button onClick={() => onNav("vendor-register")} className="hover:text-white transition-colors cursor-pointer text-left">Vendor Certification Registration</button></li>
           </ul>
         </div>
@@ -69,10 +70,6 @@ export default function Footer({ onNav, openSeoViewer }: FooterProps) {
       <div className="bg-slate-950/80 border-t border-slate-800/80 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <span>© 2026 BANTConfirm Marketplace Private Limited. All Rights Reserved.</span>
-          <div className="flex gap-4">
-            <span className="text-[11px] bg-slate-800 text-slate-400 py-1 px-2.5 rounded">Server: Live on port 3000</span>
-            <span className="text-[11px] bg-blue-950/40 text-blue-400 py-1 px-2.5 rounded border border-blue-900/40">Secure full-stack environment</span>
-          </div>
         </div>
       </div>
     </footer>

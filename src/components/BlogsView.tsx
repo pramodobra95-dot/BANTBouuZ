@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import { Calendar, User, Clock, ChevronRight, BookOpen, Share2, Tag, ArrowLeft } from "lucide-react";
+import { Calendar, User, Clock, ChevronRight, BookOpen, Share2, Tag, ArrowLeft, Heart } from "lucide-react";
 import { Blog } from "../types";
 import { safeAlert } from "../utils/safeAlert";
 
 interface BlogsViewProps {
   blogs: Blog[];
+  onLikeBlog?: (blogId: string) => void;
 }
 
-export default function BlogsView({ blogs }: BlogsViewProps) {
+export default function BlogsView({ blogs, onLikeBlog }: BlogsViewProps) {
   const [selectedBlog, setSelectedBlog] = useState<Blog | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
@@ -100,13 +101,32 @@ export default function BlogsView({ blogs }: BlogsViewProps) {
               ))}
             </div>
 
-            <button
-              onClick={() => safeAlert("Deep-link copied to clipboard! Share securely with your procurement committee.")}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 border px-3.5 py-2 rounded-lg font-bold bg-white cursor-pointer"
-            >
-              <Share2 className="w-4 h-4" />
-              Share Sourcing Guide
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (onLikeBlog) {
+                    onLikeBlog(selectedBlog.id);
+                    // Update local count for immediate feedback
+                    setSelectedBlog({
+                      ...selectedBlog,
+                      likes: (selectedBlog.likes || 0) + 1
+                    });
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 text-xs text-rose-600 hover:text-white border border-rose-200 hover:border-rose-500 hover:bg-rose-500 px-3.5 py-2 rounded-lg font-bold bg-white transition-all cursor-pointer shadow-xs active:scale-95"
+              >
+                <Heart className="w-4 h-4 fill-rose-500 text-rose-500 hover:scale-110 transition-transform" />
+                <span>Love ({selectedBlog.likes || 0})</span>
+              </button>
+
+              <button
+                onClick={() => safeAlert("Deep-link copied to clipboard! Share securely with your procurement committee.")}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 border px-3.5 py-2 rounded-lg font-bold bg-white cursor-pointer"
+              >
+                <Share2 className="w-4 h-4" />
+                Share Sourcing Guide
+              </button>
+            </div>
           </div>
         </div>
       ) : (
@@ -167,7 +187,21 @@ export default function BlogsView({ blogs }: BlogsViewProps) {
                       <span className="bg-blue-50 text-[#0066FF] px-2 py-0.5 rounded">
                         {blog.category}
                       </span>
-                      <span>{blog.readTime}</span>
+                      
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onLikeBlog) onLikeBlog(blog.id);
+                          }}
+                          className="inline-flex items-center gap-1 text-rose-500 hover:text-rose-700 bg-rose-50/50 hover:bg-rose-50 px-2 py-0.5 rounded transition-all cursor-pointer font-bold active:scale-90"
+                          title="Love this article"
+                        >
+                          <Heart className="w-3 h-3 fill-rose-500" />
+                          <span>{blog.likes || 0}</span>
+                        </button>
+                        <span>{blog.readTime}</span>
+                      </div>
                     </div>
 
                     <h3 className="font-bold text-xs text-slate-800 line-clamp-2 leading-relaxed group-hover:text-[#0066FF] transition-colors">
