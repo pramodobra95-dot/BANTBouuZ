@@ -131,11 +131,16 @@ export default function App() {
 
         if (authRes.data?.user) {
           const uMeta = authRes.data.user.user_metadata;
+          const emailLower = (authRes.data.user.email || "").trim().toLowerCase();
+          let userRole = uMeta?.role || "buyer";
+          if (emailLower === "admin@bantconfirm.com" || emailLower === "info.bouuz@gmail.com" || emailLower === "info.bouuz@gmail.co" || emailLower === "pramodobra95@gmail.com") {
+            userRole = "admin";
+          }
           resUser = {
             id: authRes.data.user.id,
             email: authRes.data.user.email || "",
             name: uMeta?.name || authRes.data.user.email?.split("@")[0] || "User",
-            role: uMeta?.role || "buyer",
+            role: userRole,
             companyName: uMeta?.companyName || "",
             mobile: uMeta?.mobile || "",
             city: uMeta?.city || "",
@@ -258,11 +263,16 @@ export default function App() {
         if (error) throw error;
         if (data.user) {
           const uMeta = data.user.user_metadata;
+          const emailLower = (data.user.email || "").trim().toLowerCase();
+          let userRole = uMeta?.role || authRole;
+          if (emailLower === "admin@bantconfirm.com" || emailLower === "info.bouuz@gmail.com" || emailLower === "info.bouuz@gmail.co" || emailLower === "pramodobra95@gmail.com") {
+            userRole = "admin";
+          }
           const userObj = {
             id: data.user.id,
             email: data.user.email || "",
             name: uMeta?.name || data.user.email?.split("@")[0] || "User",
-            role: uMeta?.role || authRole,
+            role: userRole,
             companyName: uMeta?.companyName || "",
             mobile: uMeta?.mobile || "",
             city: uMeta?.city || "",
@@ -334,11 +344,16 @@ export default function App() {
         });
         if (error) throw error;
         if (data.user) {
+          const emailLower = (data.user.email || "").trim().toLowerCase();
+          let userRole = signUpRole;
+          if (emailLower === "admin@bantconfirm.com" || emailLower === "info.bouuz@gmail.com" || emailLower === "info.bouuz@gmail.co" || emailLower === "pramodobra95@gmail.com") {
+            userRole = "admin";
+          }
           const userObj = {
             id: data.user.id,
             email: data.user.email || "",
             name: signUpName,
-            role: signUpRole,
+            role: userRole,
             companyName: signUpCompany,
             mobile: signUpMobile,
             city: signUpCity,

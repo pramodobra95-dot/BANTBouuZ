@@ -163,7 +163,7 @@ export default function BecomePartnerView({ onRegisterSuccess, onNavigateToTab }
                   <input
                     type="email"
                     required
-                    placeholder="e.g. alliances@saasify.co"
+                    placeholder=""
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 text-xs border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
