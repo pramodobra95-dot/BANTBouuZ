@@ -346,10 +346,18 @@ export default function VendorPanel({
                     onChange={(e) => setRegisterForm({...registerForm, businessCategory: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 rounded p-2"
                   >
-                    <option>CRM Software</option>
-                    <option>ERP Software</option>
-                    <option>Cloud Telephony</option>
-                    <option>Cyber Security</option>
+                    {categories && categories.length > 0 ? (
+                      categories.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option>CRM Software</option>
+                        <option>ERP Software</option>
+                        <option>Cloud Telephony</option>
+                        <option>Cyber Security</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div>

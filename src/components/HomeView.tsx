@@ -249,26 +249,32 @@ export default function HomeView({
   };
 
   // Category definitions for displaying grid (matches prompt category list)
-  const fullCategoriesList = [
-    { name: "CRM Software", icon: "Users", count: "3 solutions" },
-    { name: "ERP Software", icon: "Layers", count: "2 solutions" },
-    { name: "Accounting Software", icon: "Calculator", count: "2 solutions" },
-    { name: "WhatsApp Business API", icon: "MessageSquare", count: "2 solutions" },
-    { name: "Cloud Telephony", icon: "PhoneCall", count: "2 solutions" },
-    { name: "Contact Center", icon: "Headphones", count: "1 solution" },
-    { name: "Microsoft 365", icon: "FileText", count: "1 solution" },
-    { name: "Google Workspace", icon: "Mail", count: "1 solution" },
-    { name: "AWS Services", icon: "Cloud", count: "1 solution" },
-    { name: "Azure Services", icon: "Server", count: "1 solution" },
-    { name: "Cyber Security", icon: "ShieldAlert", count: "2 solutions" },
-    { name: "Data Backup", icon: "HardDrive", count: "1 solution" },
-    { name: "AI Solutions", icon: "Brain", count: "1 solution" },
-    { name: "E-Commerce Solutions", icon: "ShoppingBag", count: "2 solutions" },
-    { name: "Website Development", icon: "Globe", count: "4 providers" },
-    { name: "Mobile App Development", icon: "Smartphone", count: "3 providers" },
-    { name: "Digital Marketing", icon: "TrendingUp", count: "5 agencies" },
-    { name: "Hardware & Networking", icon: "Cpu", count: "3 vendors" }
-  ];
+  const fullCategoriesList = categories && categories.length > 0 
+    ? categories.map(cat => ({
+        name: cat.name,
+        icon: cat.icon || "Layers",
+        count: `${cat.productsCount || 0} solutions`
+      }))
+    : [
+        { name: "CRM Software", icon: "Users", count: "3 solutions" },
+        { name: "ERP Software", icon: "Layers", count: "2 solutions" },
+        { name: "Accounting Software", icon: "Calculator", count: "2 solutions" },
+        { name: "WhatsApp Business API", icon: "MessageSquare", count: "2 solutions" },
+        { name: "Cloud Telephony", icon: "PhoneCall", count: "2 solutions" },
+        { name: "Contact Center", icon: "Headphones", count: "1 solution" },
+        { name: "Microsoft 365", icon: "FileText", count: "1 solution" },
+        { name: "Google Workspace", icon: "Mail", count: "1 solution" },
+        { name: "AWS Services", icon: "Cloud", count: "1 solution" },
+        { name: "Azure Services", icon: "Server", count: "1 solution" },
+        { name: "Cyber Security", icon: "ShieldAlert", count: "2 solutions" },
+        { name: "Data Backup", icon: "HardDrive", count: "1 solution" },
+        { name: "AI Solutions", icon: "Brain", count: "1 solution" },
+        { name: "E-Commerce Solutions", icon: "ShoppingBag", count: "2 solutions" },
+        { name: "Website Development", icon: "Globe", count: "4 providers" },
+        { name: "Mobile App Development", icon: "Smartphone", count: "3 providers" },
+        { name: "Digital Marketing", icon: "TrendingUp", count: "5 agencies" },
+        { name: "Hardware & Networking", icon: "Cpu", count: "3 vendors" }
+      ];
 
   const filteredCategories = fullCategoriesList.filter(c => 
     c.name.toLowerCase().includes(categorySearchQuery.toLowerCase())
@@ -391,7 +397,10 @@ export default function HomeView({
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin text-xs">
             <span className="text-slate-400 font-bold shrink-0">Popular tags:</span>
-            {["CRM Software", "ERP Software", "Cloud Telephony", "Cyber Security", "WhatsApp Business API"].map((cat) => (
+            {((categories && categories.length > 0)
+              ? categories.slice(0, 6).map(c => c.name)
+              : ["CRM Software", "ERP Software", "Cloud Telephony", "Cyber Security", "WhatsApp Business API"]
+            ).map((cat) => (
               <button
                 key={cat}
                 onClick={() => {

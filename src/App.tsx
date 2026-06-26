@@ -706,11 +706,17 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(catData)
         });
-        if (res.ok) fetchAllData();
+        if (res.ok) {
+          fetchAllData();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to create category on local server.");
+        }
       }
-      safeAlert("Category created successfully!");
-    } catch (err) {
+      safeAlert("Category created successfully!", "success");
+    } catch (err: any) {
       console.error(err);
+      safeAlert(err.message || "Failed to create category.", "error");
     }
   };
 
@@ -722,11 +728,17 @@ export default function App() {
         fetchAllData();
       } else {
         const res = await fetch(`/api/categories/${catId}`, { method: "DELETE" });
-        if (res.ok) fetchAllData();
+        if (res.ok) {
+          fetchAllData();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to delete category on local server.");
+        }
       }
-      safeAlert("Category deleted successfully!");
-    } catch (err) {
+      safeAlert("Category deleted successfully!", "success");
+    } catch (err: any) {
       console.error(err);
+      safeAlert(err.message || "Failed to delete category.", "error");
     }
   };
 
@@ -891,10 +903,15 @@ export default function App() {
         });
         if (res.ok) {
           fetchAllData();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to add product on local server.");
         }
       }
-    } catch (err) {
+      safeAlert("Product added successfully!", "success");
+    } catch (err: any) {
       console.error(err);
+      safeAlert(err.message || "Failed to add product.", "error");
     }
   };
 
