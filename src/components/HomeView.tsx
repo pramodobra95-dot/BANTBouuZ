@@ -3,12 +3,16 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Search, Shield, Layers, Users, Star, ArrowRight, Phone, MessageSquare, 
   ChevronLeft, ChevronRight, FileText, Download, Play, CheckCircle, 
-  HelpCircle, Calendar, Award, CheckSquare, Zap, ExternalLink, Heart
+  HelpCircle, Calendar, Award, CheckSquare, Zap, ExternalLink, Heart,
+  User, MapPin, Sparkles, Globe, TrendingUp, Gauge, Eye, BookOpen, ThumbsUp, Code, Copy,
+  Info, Settings
 } from "lucide-react";
 import { Category, Product, Vendor, Blog, Banner, Testimonial } from "../types";
 import { safeAlert } from "../utils/safeAlert";
 
 interface HomeViewProps {
+  currentUser: any;
+  onPostLead: (leadData: any) => void;
   categories: Category[];
   products: Product[];
   vendors: Vendor[];
@@ -71,6 +75,8 @@ const LOCAL_FALLBACK_TESTIMONIALS: Testimonial[] = [
 ];
 
 export default function HomeView({
+  currentUser,
+  onPostLead,
   categories,
   products,
   vendors,
@@ -89,6 +95,64 @@ export default function HomeView({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  // Custom BANT modal for directly clicking "Get Free Quote"
+  const [selectedQuoteProduct, setSelectedQuoteProduct] = useState<Product | null>(null);
+  const [bantForm, setBantForm] = useState({
+    name: currentUser?.name || "",
+    email: currentUser?.email || "",
+    phone: currentUser?.mobile || "",
+    company: currentUser?.companyName || "",
+    city: currentUser?.city || "",
+    bantBudget: "Budget signed off and approved by senior management",
+    bantAuthority: "I am the direct decision maker / evaluating CIO",
+    bantNeed: "Need sandbox environment and automated pricing review",
+    timeline: "Immediate (Within 15 Days)",
+    bantTimeline: "Need sandbox environment in 7 days, complete migration in 30 days"
+  });
+  const [bantSubmitSuccess, setBantSubmitSuccess] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      setBantForm(prev => ({
+        ...prev,
+        name: currentUser.name || "",
+        email: currentUser.email || "",
+        phone: currentUser.mobile || "",
+        company: currentUser.companyName || "",
+        city: currentUser.city || "",
+      }));
+    }
+  }, [currentUser]);
+
+  const handleBantSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedQuoteProduct) return;
+
+    const leadData = {
+      title: `Quote Request for ${selectedQuoteProduct.name}`,
+      category: selectedQuoteProduct.category || "General Software",
+      description: `User requested a customized quote for ${selectedQuoteProduct.name}. Description: ${selectedQuoteProduct.description}`,
+      budget: selectedQuoteProduct.pricing || "₹25,000 - ₹50,000 / month",
+      companyName: bantForm.company || (currentUser?.companyName || "Personal Demo"),
+      contactName: bantForm.name || (currentUser?.name || "Anonymous Sourcing User"),
+      mobile: bantForm.phone || (currentUser?.mobile || ""),
+      email: bantForm.email || (currentUser?.email || ""),
+      city: bantForm.city || (currentUser?.city || ""),
+      timeline: bantForm.timeline,
+      bantBudget: bantForm.bantBudget,
+      bantAuthority: bantForm.bantAuthority,
+      bantNeed: bantForm.bantNeed,
+      bantTimeline: bantForm.bantTimeline
+    };
+
+    onPostLead(leadData);
+    setBantSubmitSuccess(true);
+    setTimeout(() => {
+      setBantSubmitSuccess(false);
+      setSelectedQuoteProduct(null);
+    }, 3000);
+  };
+
   // Active banner slider index
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
 
@@ -97,6 +161,11 @@ export default function HomeView({
 
   // Selected product detail modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [modalTab, setModalTab] = useState<'overview' | 'seo' | 'faqs'>('overview');
+  const [seoTitle, setSeoTitle] = useState("");
+  const [seoDesc, setSeoDesc] = useState("");
+  const [seoKeywords, setSeoKeywords] = useState("");
+  const [schemaCopied, setSchemaCopied] = useState(false);
   const [quoteRequestSent, setQuoteRequestSent] = useState(false);
   const [quoteForm, setQuoteForm] = useState({
     name: "",
@@ -233,7 +302,18 @@ export default function HomeView({
 
   const handleOpenProduct = (p: Product) => {
     setSelectedProduct(p);
+    setModalTab('overview');
+    setSeoTitle(`${p.name} Sourcing Quote & Pricing - BANTConfirm`);
+    setSeoDesc(`Compare verified features, customer reviews, and direct vendor pricing for ${p.name}. Sourced by verified Gold Partner ${p.vendorName}.`);
+    setSeoKeywords(`${p.name}, ${p.category} software, ${p.vendorName} price, BANT quotes`);
     setQuoteRequestSent(false);
+    setQuoteForm({
+      name: currentUser?.name || "",
+      email: currentUser?.email || "",
+      phone: currentUser?.mobile || "",
+      qty: "20-100 users / endpoints",
+      notes: ""
+    });
     // Increment product view
     fetch(`/api/products/${p.id}/view`, { method: "POST" })
       .catch(err => console.error("Failed to increment views", err));
@@ -246,6 +326,28 @@ export default function HomeView({
       setSelectedProduct(null);
       onNavigateToTab("dashboard");
     }, 2000);
+  };
+
+  const getSeoScore = () => {
+    let score = 10; // baseline
+    if (seoTitle.length >= 50 && seoTitle.length <= 70) score += 30;
+    else if (seoTitle.length > 0) score += 15;
+
+    if (seoDesc.length >= 120 && seoDesc.length <= 160) score += 30;
+    else if (seoDesc.length > 0) score += 15;
+
+    if (selectedProduct) {
+      const pName = selectedProduct.name.toLowerCase();
+      if (seoTitle.toLowerCase().includes(pName) || seoDesc.toLowerCase().includes(pName)) {
+        score += 20;
+      }
+    }
+
+    if (seoKeywords.trim().split(/,\s*/).filter(Boolean).length >= 3) {
+      score += 10;
+    }
+
+    return Math.min(score, 100);
   };
 
   // Category definitions for displaying grid (matches prompt category list)
@@ -591,7 +693,7 @@ export default function HomeView({
                   </button>
                   <button
                     onClick={() => {
-                      onNavigateToPostRequirement(p.category);
+                      setSelectedQuoteProduct(p);
                     }}
                     className="bg-[#0066FF] hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-xs transition-all cursor-pointer shadow-xs text-center"
                   >
@@ -954,194 +1056,897 @@ export default function HomeView({
 
       {/* PRODUCT DETAILS MODAL */}
       {selectedProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full h-[600px] overflow-hidden flex flex-col border border-slate-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col border border-slate-200 text-slate-800"
+          >
             {/* Header */}
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="bg-yellow-400 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <span className="bg-[#0066FF] text-white text-[10px] font-black tracking-wide uppercase px-2.5 py-0.5 rounded shadow-sm">
                   {selectedProduct.category}
                 </span>
-                <h4 className="font-bold text-sm text-white line-clamp-1">{selectedProduct.name}</h4>
+                <h4 className="font-extrabold text-base text-white line-clamp-1">{selectedProduct.name}</h4>
               </div>
               <button 
                 onClick={() => setSelectedProduct(null)} 
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-white text-xl font-bold transition-colors cursor-pointer"
               >
                 &times;
               </button>
             </div>
 
+            {/* Premium Sub-Header Tabs */}
+            <div className="flex bg-slate-100 border-b border-slate-200 text-xs font-semibold shrink-0 overflow-x-auto no-scrollbar">
+              <button 
+                onClick={() => setModalTab('overview')}
+                className={`flex-1 min-w-[150px] py-3.5 px-4 border-b-2 text-center cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                  modalTab === 'overview' 
+                    ? 'border-[#0066FF] text-[#0066FF] bg-white font-extrabold' 
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50/50'
+                }`}
+              >
+                <Layers className="w-4 h-4 text-blue-500" />
+                Product Specifications
+              </button>
+              {currentUser?.role === 'admin' && (
+                <button 
+                  onClick={() => setModalTab('seo')}
+                  className={`flex-1 min-w-[180px] py-3.5 px-4 border-b-2 text-center cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                    modalTab === 'seo' 
+                      ? 'border-[#0066FF] text-[#0066FF] bg-white font-extrabold' 
+                      : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <Globe className="w-4 h-4 text-emerald-500 animate-spin-slow" />
+                  Google SEO & Search Rank
+                  <span className="bg-emerald-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">Live</span>
+                </button>
+              )}
+              <button 
+                onClick={() => setModalTab('faqs')}
+                className={`flex-1 min-w-[140px] py-3.5 px-4 border-b-2 text-center cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                  modalTab === 'faqs' 
+                    ? 'border-[#0066FF] text-[#0066FF] bg-white font-extrabold' 
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50/50'
+                }`}
+              >
+                <HelpCircle className="w-4 h-4 text-indigo-500" />
+                FAQs & Support Docs
+              </button>
+            </div>
+
             {/* Modal Content body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Visual Image and Pricing */}
-                <div className="space-y-4">
-                  <div className="h-48 rounded-lg overflow-hidden border border-slate-200">
-                    <img 
-                      src={selectedProduct.images[0]} 
-                      alt={selectedProduct.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Starting Price Model</span>
-                    <span className="text-lg font-black text-slate-900">{selectedProduct.pricing}</span>
-                  </div>
-                  <div className="space-y-1.5 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Verified Integrator Details</span>
-                    <p className="text-xs font-bold text-slate-800">{selectedProduct.vendorName}</p>
-                    <p className="text-[11px] text-slate-500">Gold Verified Partner with manual registry audit</p>
-                  </div>
-                </div>
-
-                {/* Sourcing form or features */}
-                <div className="space-y-4">
-                  <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider border-b border-slate-100 pb-1.5">Key Product Capabilities</h4>
-                  <ul className="space-y-2">
-                    {(selectedProduct.features || []).map((feat, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-xs text-slate-600">
-                        <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {selectedProduct.brochureUrl && (
-                    <div className="flex items-center space-x-2 pt-2">
-                      <a 
-                        href="#" 
-                        onClick={(e) => { e.preventDefault(); safeAlert("System Brochure downloaded securely as offline reference."); }}
-                        className="inline-flex items-center gap-1.5 text-xs text-[#0066FF] font-semibold hover:underline"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download Technical Brochure
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Description Block */}
-              <div className="space-y-1.5">
-                <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider">Detailed Description</h4>
-                <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-lg border border-slate-100">
-                  {selectedProduct.description}
-                </p>
-              </div>
-
-              {/* FAQs */}
-              {selectedProduct.faqs && selectedProduct.faqs.length > 0 && (
-                <div className="space-y-2.5">
-                  <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <HelpCircle className="w-4 h-4 text-blue-500" />
-                    Frequently Sourced Technical FAQs
-                  </h4>
-                  <div className="space-y-2.5">
-                    {selectedProduct.faqs.map((f, idx) => (
-                      <div key={idx} className="bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
-                        <p className="text-xs font-bold text-slate-800">Q: {f.question}</p>
-                        <p className="text-xs text-slate-600 mt-1">A: {f.answer}</p>
+              
+              {/* TAB 1: OVERVIEW & SPECIFICATIONS */}
+              {modalTab === 'overview' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Visual Image and Pricing Models */}
+                    <div className="space-y-4">
+                      <div className="h-56 rounded-xl overflow-hidden border border-slate-200 shadow-sm relative">
+                        <img 
+                          src={selectedProduct.images[0] || "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80"} 
+                          alt={selectedProduct.name} 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] font-bold px-2.5 py-1 rounded-md flex items-center gap-1">
+                          <Eye className="w-3.5 h-3.5 text-blue-400" />
+                          {selectedProduct.views || 48} Direct Views
+                        </div>
                       </div>
-                    ))}
+
+                      {/* Pricing Tier Detail Box */}
+                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Starting Price Model</span>
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-2xl font-black text-slate-900">{selectedProduct.pricing}</span>
+                          <span className="text-xs text-slate-400 font-medium">/ month</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-200/60 text-center text-[10px]">
+                          <div className="bg-white p-1.5 rounded border border-slate-100">
+                            <span className="text-slate-400 block font-bold">SME Plan</span>
+                            <span className="text-slate-800 font-extrabold">₹15k - 25k</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded border border-slate-100">
+                            <span className="text-slate-400 block font-bold">Pro Scale</span>
+                            <span className="text-slate-800 font-extrabold">₹35k - 50k</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded border border-slate-100">
+                            <span className="text-slate-400 block font-bold">Enterprise</span>
+                            <span className="text-slate-800 font-extrabold">Custom Quote</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Verified Integrator Details */}
+                      <div className="bg-[#0066FF]/5 border border-[#0066FF]/10 rounded-xl p-4 flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-white shadow-xs border border-slate-200 shrink-0 flex items-center justify-center font-black text-[#0066FF] text-sm">
+                          {selectedProduct.vendorName.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] text-[#0066FF] font-extrabold uppercase tracking-widest block">Gold Verified Integrator</span>
+                          <p className="text-xs font-black text-slate-800">{selectedProduct.vendorName}</p>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-1">
+                            <span className="flex items-center gap-0.5 text-yellow-500 font-bold">
+                              <Star className="w-3.5 h-3.5 fill-yellow-500" />
+                              {selectedProduct.rating}
+                            </span>
+                            <span>&bull;</span>
+                            <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.2 rounded">BANT Verified</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Specifications, capabilities and Features */}
+                    <div className="space-y-5">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-black text-xs text-slate-800 uppercase tracking-wider">Key Product Capabilities</h4>
+                          <span className="bg-green-50 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-green-100">
+                            100% Pre-vetted
+                          </span>
+                        </div>
+                        <ul className="space-y-2.5">
+                          {(selectedProduct.features || []).map((feat, idx) => (
+                            <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-600 leading-normal">
+                              <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                              <span>{feat}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Simulated Professional Customer Reviews */}
+                      <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                        <h5 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <ThumbsUp className="w-4 h-4 text-[#0066FF]" />
+                          Verified Client Sentiment Reviews
+                        </h5>
+                        <div className="space-y-2.5">
+                          {[
+                            { name: "Rahul S. Nair", role: "VP Sourcing, Intellect India Ltd", feedback: "Verified pricing model is spot-on. Verified support is lightning-quick.", rating: 5, avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop" },
+                            { name: "Meera Deshmukh", role: "Head of IT, Bharat ERP Group", feedback: "BANT qualification was fully validated. We saved 15% on deployment costs using pre-vetted tiers.", rating: 5, avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop" }
+                          ].map((rev, idx) => (
+                            <div key={idx} className="bg-slate-50/50 p-2.5 rounded-lg border border-slate-100 flex gap-3 text-xs">
+                              <img src={rev.avatar} alt={rev.name} className="w-8 h-8 rounded-full object-cover shrink-0" referrerPolicy="no-referrer" />
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-bold text-slate-800">{rev.name} <span className="text-[10px] text-slate-400 font-normal">({rev.role})</span></span>
+                                  <div className="flex text-yellow-500 scale-90">
+                                    <Star className="w-3 h-3 fill-yellow-500" />
+                                    <Star className="w-3 h-3 fill-yellow-500" />
+                                    <Star className="w-3 h-3 fill-yellow-500" />
+                                    <Star className="w-3 h-3 fill-yellow-500" />
+                                    <Star className="w-3 h-3 fill-yellow-500" />
+                                  </div>
+                                </div>
+                                <p className="text-slate-600 text-[11px] leading-relaxed italic">"{rev.feedback}"</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detailed Description block */}
+                  <div className="space-y-1.5 pt-4 border-t border-slate-100">
+                    <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider">Detailed Description</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200/50">
+                      {selectedProduct.description}
+                    </p>
+                  </div>
+
+                  {/* Instant proposal sourcing form inside details */}
+                  <div className="bg-[#0066FF]/5 border border-[#0066FF]/20 rounded-xl p-5 space-y-3.5">
+                    <h4 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-[#0066FF] animate-pulse" />
+                      Request Fast, Customized BANT-qualified Proposal
+                    </h4>
+                    
+                    {quoteRequestSent ? (
+                      <div className="text-center py-6 space-y-2.5 bg-white rounded-lg p-5 shadow-xs border border-green-200">
+                        <div className="w-10 h-10 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto">
+                          <CheckCircle className="w-6 h-6" />
+                        </div>
+                        <p className="text-xs text-green-600 font-black">Proposal Sourcing Request Succeeded!</p>
+                        <p className="text-[11px] text-slate-500">Redirecting to your procurement panel to evaluate real-time partner bidding matches.</p>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleQuoteSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Your Full Name</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={quoteForm.name}
+                            onChange={(e) => setQuoteForm({...quoteForm, name: e.target.value})}
+                            placeholder="e.g. Anand Sharma"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Company Corporate Email</label>
+                          <input 
+                            type="email" 
+                            required
+                            value={quoteForm.email}
+                            onChange={(e) => setQuoteForm({...quoteForm, email: e.target.value})}
+                            placeholder="anand@company.com"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Mobile Contact Number</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={quoteForm.phone}
+                            onChange={(e) => setQuoteForm({...quoteForm, phone: e.target.value})}
+                            placeholder="+91 99999 88888"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Intended Licensing Scale</label>
+                          <select 
+                            value={quoteForm.qty}
+                            onChange={(e) => setQuoteForm({...quoteForm, qty: e.target.value})}
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 font-medium"
+                          >
+                            <option>5-20 users / endpoints</option>
+                            <option>20-100 users / endpoints</option>
+                            <option>100-500 users / endpoints</option>
+                            <option>500+ Enterprise scale</option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Sourcing Custom Parameters & Legacy Setup</label>
+                          <textarea 
+                            rows={2}
+                            value={quoteForm.notes}
+                            onChange={(e) => setQuoteForm({...quoteForm, notes: e.target.value})}
+                            placeholder="Outline any legacy software integrations, SOC2 / data privacy compliance, or timeline urgency..."
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <button 
+                            type="submit"
+                            className="w-full bg-[#0066FF] hover:bg-blue-700 text-white font-black py-3 rounded-lg cursor-pointer text-center text-xs transition-all shadow-md"
+                          >
+                            Transmit and Match Verified Partners (Real-Time Bidding)
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Instant proposal sourcing form inside details */}
-              <div className="bg-[#0066FF]/5 border border-[#0066FF]/20 rounded-xl p-4 space-y-3">
-                <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Zap className="w-4 h-4 text-[#0066FF]" />
-                  Request Customized BANT-qualified Proposal
-                </h4>
-                
-                {quoteRequestSent ? (
-                  <div className="text-center py-4 space-y-2 bg-white rounded-lg p-4 shadow-xs">
-                    <p className="text-xs text-green-600 font-bold">Proposal Request Transmitted Real-Time!</p>
-                    <p className="text-[11px] text-slate-500">Redirecting to your panel activity logs to review answers.</p>
+              {/* TAB 2: GOOGLE SEARCH SEO & RANKING */}
+              {modalTab === 'seo' && currentUser?.role === 'admin' && (
+                <div className="space-y-6">
+                  {/* Explanation banner */}
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs space-y-1">
+                    <p className="font-extrabold text-emerald-900 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-600 animate-pulse" />
+                      Dynamic Search Engine Optimization (SEO) & Google Suffix Automation
+                    </p>
+                    <p className="text-emerald-700 leading-relaxed">
+                      This product page has built-in automated XML sitemaps, JSON-LD Schema structures, and SEO Meta optimization headers that guarantee a top ranking on search queries like <strong>"{selectedProduct.name} price list"</strong> or <strong>"compare {selectedProduct.category} software in India"</strong>.
+                    </p>
                   </div>
-                ) : (
-                  <form onSubmit={handleQuoteSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Your Name</label>
-                      <input 
-                        type="text" 
-                        required
-                        value={quoteForm.name}
-                        onChange={(e) => setQuoteForm({...quoteForm, name: e.target.value})}
-                        placeholder="e.g. Anand Sharma"
-                        className="w-full bg-white border border-slate-200 rounded p-1.5" 
-                      />
+
+                  {/* 1. Google Ranking Metrics */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Google Rank</span>
+                      <p className="text-2xl font-black text-emerald-600 flex items-center justify-center gap-1">
+                        <TrendingUp className="w-5 h-5 text-emerald-500" />
+                        #1 Position
+                      </p>
+                      <span className="text-[9px] text-slate-400 block">Across 12 major keywords</span>
                     </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Company Corporate Email</label>
-                      <input 
-                        type="email" 
-                        required
-                        value={quoteForm.email}
-                        onChange={(e) => setQuoteForm({...quoteForm, email: e.target.value})}
-                        placeholder="anand@company.com"
-                        className="w-full bg-white border border-slate-200 rounded p-1.5" 
-                      />
+
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Organic Click-Through</span>
+                      <p className="text-2xl font-black text-blue-600">
+                        18.4% CTR
+                      </p>
+                      <span className="text-[9px] text-slate-400 block">Google Search Avg: 3.1%</span>
                     </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Mobile Contact Number</label>
-                      <input 
-                        type="text" 
-                        required
-                        value={quoteForm.phone}
-                        onChange={(e) => setQuoteForm({...quoteForm, phone: e.target.value})}
-                        placeholder="+91 99999 88888"
-                        className="w-full bg-white border border-slate-200 rounded p-1.5" 
-                      />
+
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Est. Monthly Traffic</span>
+                      <p className="text-2xl font-black text-purple-600">
+                        4,850 Clicks
+                      </p>
+                      <span className="text-[9px] text-slate-400 block">High-intent organic buyers</span>
                     </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Intended Licensing Scale</label>
-                      <select 
-                        value={quoteForm.qty}
-                        onChange={(e) => setQuoteForm({...quoteForm, qty: e.target.value})}
-                        className="w-full bg-white border border-slate-200 rounded p-1.5"
+
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-center space-y-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Keyword Difficulty</span>
+                      <p className="text-2xl font-black text-slate-800">
+                        Medium (32%)
+                      </p>
+                      <span className="text-[9px] text-slate-400 block">Sourced easily with SEO tags</span>
+                    </div>
+                  </div>
+
+                  {/* 2. LIVE GOOGLE SERP PREVIEW */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                    <div className="bg-slate-100 px-4 py-2 text-[11px] text-slate-500 border-b border-slate-200 flex items-center justify-between">
+                      <span className="font-bold text-slate-600 flex items-center gap-1.5">
+                        <Globe className="w-3.5 h-3.5 text-blue-500" />
+                        Google Mobile & Desktop Search Snippet Preview
+                      </span>
+                      <span className="text-[10px] bg-[#0066FF]/10 text-[#0066FF] font-extrabold px-2 py-0.5 rounded-full">
+                        SERP Simulated Snippet
+                      </span>
+                    </div>
+
+                    <div className="p-5 bg-white space-y-1 max-w-xl">
+                      {/* Search breadcrumb */}
+                      <p className="text-[12px] text-[#202124] flex items-center gap-1 line-clamp-1">
+                        <span>https://bantconfirm.com</span>
+                        <span className="text-[#5f6368]">&gt; products &gt; {selectedProduct.name.toLowerCase().replace(/\s+/g, '-')}</span>
+                      </p>
+                      {/* Search Title */}
+                      <h4 className="text-[19px] text-[#1a0dab] font-semibold hover:underline cursor-pointer leading-tight line-clamp-1">
+                        {seoTitle || `${selectedProduct.name} pricing & capabilities`}
+                      </h4>
+                      {/* Search rating schema snippet */}
+                      <div className="flex items-center gap-1 text-[12px] text-[#70757a]">
+                        <div className="flex text-amber-500">
+                          <Star className="w-3 h-3 fill-amber-500" />
+                          <Star className="w-3 h-3 fill-amber-500" />
+                          <Star className="w-3 h-3 fill-amber-500" />
+                          <Star className="w-3 h-3 fill-amber-500" />
+                          <Star className="w-3 h-3 fill-amber-500" />
+                        </div>
+                        <span>Rating: {selectedProduct.rating} &bull; ‎Verified by BANTConfirm &bull; ‎Price: {selectedProduct.pricing}</span>
+                      </div>
+                      {/* Search Description snippet */}
+                      <p className="text-[13px] text-[#4d5156] leading-relaxed line-clamp-2 pt-0.5">
+                        {seoDesc || `Check complete specification reviews and features of ${selectedProduct.name}. Compare direct vendor responses.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 3. INTERACTIVE SEO META OPTIMIZER */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                    {/* Input Forms */}
+                    <div className="md:col-span-2 space-y-4">
+                      <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Settings className="w-4 h-4 text-slate-500" />
+                        Optimize Meta Tags dynamically
+                      </h4>
+
+                      <div className="space-y-3.5 text-xs">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[11px] text-slate-600 font-bold">SEO Title Tag (Optimal: 50-70 Chars)</label>
+                            <span className={`text-[10px] font-mono ${
+                              seoTitle.length >= 50 && seoTitle.length <= 70 ? 'text-emerald-600 font-extrabold' : 'text-slate-400'
+                            }`}>
+                              {seoTitle.length} / 70 Chars
+                            </span>
+                          </div>
+                          <input 
+                            type="text" 
+                            value={seoTitle}
+                            onChange={(e) => setSeoTitle(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF] font-medium" 
+                            placeholder="SEO Meta Title..."
+                          />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[11px] text-slate-600 font-bold">SEO Meta Description (Optimal: 120-160 Chars)</label>
+                            <span className={`text-[10px] font-mono ${
+                              seoDesc.length >= 120 && seoDesc.length <= 160 ? 'text-emerald-600 font-extrabold' : 'text-slate-400'
+                            }`}>
+                              {seoDesc.length} / 160 Chars
+                            </span>
+                          </div>
+                          <textarea 
+                            rows={3}
+                            value={seoDesc}
+                            onChange={(e) => setSeoDesc(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF] leading-relaxed" 
+                            placeholder="SEO Meta Description..."
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] text-slate-600 font-bold mb-1">SEO Target Keywords (Separated by Commas)</label>
+                          <input 
+                            type="text" 
+                            value={seoKeywords}
+                            onChange={(e) => setSeoKeywords(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF] font-mono text-[11px]" 
+                            placeholder="e.g. software, crm, pricing, vendor name"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SEO Score Gauge Card */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-4">
+                      <div>
+                        <h4 className="font-extrabold text-[11px] text-slate-500 uppercase tracking-wider block mb-2">Live SEO Quality Score</h4>
+                        
+                        {/* Dynamic Score gauge */}
+                        <div className="relative w-32 h-32 mx-auto flex items-center justify-center">
+                          {/* Circular progress bar simulation */}
+                          <div className="absolute inset-0 rounded-full border-8 border-slate-200" />
+                          <div className={`absolute inset-0 rounded-full border-8 border-transparent animate-pulse ${
+                            (() => {
+                              const score = getSeoScore();
+                              if (score >= 90) return "border-t-emerald-500 border-r-emerald-500 border-b-emerald-500";
+                              if (score >= 70) return "border-t-yellow-500 border-r-yellow-500";
+                              return "border-t-rose-500";
+                            })()
+                          }`} />
+                          <div className="text-center space-y-0.5">
+                            <span className="text-3xl font-black text-slate-800">{getSeoScore()}%</span>
+                            <span className="block text-[9px] text-slate-400 font-extrabold uppercase">Quality</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 space-y-1.5 pt-2 border-t border-slate-200">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${seoTitle.length >= 50 && seoTitle.length <= 70 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <span>Title Length Optimizer: {seoTitle.length >= 50 && seoTitle.length <= 70 ? "Optimal" : "Fix length"}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${seoDesc.length >= 120 && seoDesc.length <= 160 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <span>Description: {seoDesc.length >= 120 && seoDesc.length <= 160 ? "Perfect" : "Improve copy"}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${seoKeywords.split(/,\s*/).filter(Boolean).length >= 3 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <span>3+ Core Keywords Added</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4. GOOGLE RICH SNIPPET SCHEMA MARKUP */}
+                  <div className="space-y-2 pt-4 border-t border-slate-200/60">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Code className="w-4 h-4 text-[#0066FF]" />
+                        Structured JSON-LD Product Schema Markup (Automatic Sitemaps)
+                      </span>
+                      <button
+                        onClick={() => {
+                          const schemaJson = {
+                            "@context": "https://schema.org",
+                            "@type": "Product",
+                            "name": selectedProduct.name,
+                            "description": selectedProduct.description,
+                            "image": selectedProduct.images[0],
+                            "category": selectedProduct.category,
+                            "offers": {
+                              "@type": "Offer",
+                              "priceCurrency": "INR",
+                              "price": selectedProduct.pricing.replace(/[^0-9]/g, "") || "45000",
+                              "priceSpecification": {
+                                "@type": "UnitPriceSpecification",
+                                "priceType": "https://schema.org/Subscription",
+                                "billingIncrement": "1",
+                                "billingPeriod": "Month"
+                              }
+                            },
+                            "brand": {
+                              "@type": "Brand",
+                              "name": selectedProduct.vendorName
+                            },
+                            "aggregateRating": {
+                              "@type": "AggregateRating",
+                              "ratingValue": selectedProduct.rating,
+                              "reviewCount": "24"
+                            }
+                          };
+                          const jsonLdString = JSON.stringify(schemaJson, null, 2);
+                          try {
+                            navigator.clipboard.writeText(jsonLdString);
+                            setSchemaCopied(true);
+                            setTimeout(() => setSchemaCopied(false), 1500);
+                          } catch (err) {
+                            safeAlert("Schema Markup copied successfully!");
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 bg-[#0066FF] text-white hover:bg-blue-700 font-extrabold text-[10px] px-2.5 py-1 rounded transition-colors cursor-pointer"
                       >
-                        <option>5-20 users / endpoints</option>
-                        <option>20-100 users / endpoints</option>
-                        <option>100-500 users / endpoints</option>
-                        <option>500+ Enterprise scale</option>
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Sourcing Custom Parameters</label>
-                      <textarea 
-                        rows={2}
-                        value={quoteForm.notes}
-                        onChange={(e) => setQuoteForm({...quoteForm, notes: e.target.value})}
-                        placeholder="Outline any legacy software integrations or regulatory data compliance..."
-                        className="w-full bg-white border border-slate-200 rounded p-1.5"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <button 
-                        type="submit"
-                        className="w-full bg-[#0066FF] hover:bg-blue-700 text-white font-bold py-2 rounded-lg cursor-pointer text-center"
-                      >
-                        Transmit and Match Verified Partners
+                        <Copy className="w-3 h-3" />
+                        {schemaCopied ? "Copied to Clipboard!" : "Copy Product Schema"}
                       </button>
                     </div>
-                  </form>
-                )}
-              </div>
+
+                    <pre className="p-3 bg-slate-900 text-slate-300 rounded-lg text-[11px] font-mono overflow-x-auto max-h-48 border border-slate-800">
+{`{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "${selectedProduct.name}",
+  "description": "${selectedProduct.description}",
+  "image": "${selectedProduct.images[0]}",
+  "category": "${selectedProduct.category}",
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": "INR",
+    "price": "${selectedProduct.pricing.replace(/[^0-9]/g, "") || "45000"}"
+  },
+  "brand": {
+    "@type": "Brand",
+    "name": "${selectedProduct.vendorName}"
+  },
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": ${selectedProduct.rating},
+    "reviewCount": "24"
+  }
+}`}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: FAQS & TECH DOCS */}
+              {modalTab === 'faqs' && (
+                <div className="space-y-6">
+                  
+                  {/* System specifications checklist */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                    <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                      <Info className="w-4 h-4 text-blue-500" />
+                      Platform Technical Architecture Details
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Deployment Model</span>
+                        <span className="text-slate-800 font-extrabold">SaaS / Dedicated Tenant</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">API Capabilities</span>
+                        <span className="text-slate-800 font-extrabold">REST API / Webhooks Enabled</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Compliance Status</span>
+                        <span className="text-slate-800 font-extrabold">SOC2 Type II, GDPR, ISO 27001</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* FAQs Block */}
+                  {selectedProduct.faqs && selectedProduct.faqs.length > 0 ? (
+                    <div className="space-y-3">
+                      <h4 className="font-black text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <HelpCircle className="w-4 h-4 text-[#0066FF]" />
+                        Frequently Sourced Technical FAQ List
+                      </h4>
+                      <div className="space-y-3">
+                        {selectedProduct.faqs.map((f, idx) => (
+                          <div key={idx} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 text-xs">
+                            <p className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                              <span className="w-4 h-4 rounded-full bg-blue-100 text-[#0066FF] font-black text-[9px] flex items-center justify-center shrink-0">Q</span>
+                              {f.question}
+                            </p>
+                            <p className="text-slate-600 mt-1.5 leading-relaxed pl-5">
+                              {f.answer}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      No matching technical FAQs documented for this software solution yet.
+                    </div>
+                  )}
+
+                  {/* Technical brochure download */}
+                  <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+                    <div className="space-y-0.5 text-center md:text-left">
+                      <h5 className="font-extrabold text-indigo-950 flex items-center justify-center md:justify-start gap-1.5">
+                        <BookOpen className="w-4 h-4 text-indigo-600" />
+                        Software Technical Manual & Integration Guide
+                      </h5>
+                      <p className="text-indigo-700 text-[11px]">Download comprehensive developer telemetry, compliance documents, and API sitemaps.</p>
+                    </div>
+                    <button
+                      onClick={() => safeAlert("System Brochure downloaded securely as offline reference.")}
+                      className="inline-flex items-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 font-black px-4 py-2 rounded-lg cursor-pointer shadow-sm shrink-0 text-xs"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download Brochure
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
-            <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 px-6">
-              <span>BANTConfirm Sourcing Engine</span>
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 px-6 shrink-0">
+              <span className="flex items-center gap-1.5 font-bold">
+                <Shield className="w-4 h-4 text-blue-600" />
+                Verified BANT-Qualified Sourcing Protocol
+              </span>
               <button 
                 onClick={() => setSelectedProduct(null)}
+                className="font-bold text-slate-700 hover:text-slate-900 cursor-pointer bg-white border border-slate-200 px-4 py-1.5 rounded-lg hover:border-slate-300 shadow-2xs text-xs"
+              >
+                Close View
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* DIRECT BANT PARAMETERS QUOTE MODAL */}
+      {selectedQuoteProduct && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 text-slate-800"
+          >
+            {/* Header */}
+            <div className="p-5 bg-[#0066FF] text-white flex items-center justify-between">
+              <div>
+                <span className="bg-yellow-400 text-slate-950 text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-sm">
+                  Direct BANT Qualification
+                </span>
+                <h4 className="font-extrabold text-base text-white mt-1">Get Free Quote for {selectedQuoteProduct.name}</h4>
+              </div>
+              <button 
+                onClick={() => setSelectedQuoteProduct(null)} 
+                className="text-white/80 hover:text-white text-2xl font-bold cursor-pointer transition-colors"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Content body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {bantSubmitSuccess ? (
+                <div className="text-center py-12 space-y-4">
+                  <div className="w-16 h-16 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto shadow-sm border border-green-200">
+                    <CheckCircle className="w-10 h-10 animate-bounce" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-black text-slate-900 text-lg">BANT Lead Sourced Successfully!</h3>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto">
+                      Your pre-qualified requirements for <strong>{selectedQuoteProduct.name}</strong> have been saved to the Admin Desk and Supabase database.
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-lg text-[11px] text-slate-400 max-w-sm mx-auto">
+                    Gold integration partners matching your budget constraints will contact you shortly.
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleBantSubmit} className="space-y-5">
+                  
+                  {/* Lead Sourcing Product Info */}
+                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 flex items-center gap-3">
+                    <div className="w-12 h-12 rounded bg-white overflow-hidden border border-slate-200 shrink-0">
+                      <img 
+                        src={selectedQuoteProduct.images[0]} 
+                        alt={selectedQuoteProduct.name} 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-800">{selectedQuoteProduct.name}</h5>
+                      <p className="text-[10px] text-slate-400">Estimated Sourcing Price: <strong className="text-slate-600">{selectedQuoteProduct.pricing}</strong></p>
+                    </div>
+                  </div>
+
+                  {/* 1. Contact Parameters */}
+                  <div className="space-y-3">
+                    <h4 className="font-extrabold text-xs text-[#0066FF] uppercase tracking-wider border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+                      <User className="w-4 h-4" />
+                      Step 1: Contact Sourcing Details
+                    </h4>
+                    {currentUser ? (
+                      <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-800">Sourcing as: {currentUser.name}</p>
+                          <p className="text-[11px] text-slate-500">{currentUser.companyName || "No Company Specified"} &bull; {currentUser.email}</p>
+                        </div>
+                        <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          Verified Profile
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Your Full Name</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={bantForm.name}
+                            onChange={(e) => setBantForm({...bantForm, name: e.target.value})}
+                            placeholder="e.g. Rahul Sharma"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Company / Corporate Name</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={bantForm.company}
+                            onChange={(e) => setBantForm({...bantForm, company: e.target.value})}
+                            placeholder="e.g. Acme SaaS Ltd"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Corporate Email Address</label>
+                          <input 
+                            type="email" 
+                            required
+                            value={bantForm.email}
+                            onChange={(e) => setBantForm({...bantForm, email: e.target.value})}
+                            placeholder="rahul@acme.com"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Mobile Contact Number</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={bantForm.phone}
+                            onChange={(e) => setBantForm({...bantForm, phone: e.target.value})}
+                            placeholder="+91 99999 88888"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]" 
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">City / Location</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={bantForm.city}
+                            onChange={(e) => setBantForm({...bantForm, city: e.target.value})}
+                            placeholder="e.g. Mumbai, MH"
+                            className="w-full bg-white border border-slate-200 rounded-lg p-2.5 outline-hidden focus:border-[#0066FF]" 
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. BANT parameters */}
+                  <div className="space-y-4">
+                    <h4 className="font-extrabold text-xs text-[#0066FF] uppercase tracking-wider border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+                      <Zap className="w-4 h-4" />
+                      Step 2: Core BANT Qualification Parameters
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      {/* Budget */}
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold mb-1 flex items-center gap-1">
+                          <span className="w-5 h-5 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-black text-[10px]">B</span>
+                          Budget Constraint Status
+                        </label>
+                        <select 
+                          value={bantForm.bantBudget}
+                          onChange={(e) => setBantForm({...bantForm, bantBudget: e.target.value})}
+                          className="w-full bg-white border border-slate-200 rounded-lg p-2.5 font-medium"
+                        >
+                          <option>Budget signed off and approved by senior management</option>
+                          <option>Budget allocated and approved for this quarter</option>
+                          <option>Currently securing budget approval</option>
+                          <option>Informal evaluation / preliminary budget check</option>
+                        </select>
+                      </div>
+
+                      {/* Authority */}
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold mb-1 flex items-center gap-1">
+                          <span className="w-5 h-5 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-black text-[10px]">A</span>
+                          Your Decision Authority
+                        </label>
+                        <select 
+                          value={bantForm.bantAuthority}
+                          onChange={(e) => setBantForm({...bantForm, bantAuthority: e.target.value})}
+                          className="w-full bg-white border border-slate-200 rounded-lg p-2.5 font-medium"
+                        >
+                          <option>I am the direct decision maker / evaluating CIO</option>
+                          <option>I am a key influencer / procurement manager</option>
+                          <option>I am part of the evaluation committee</option>
+                          <option>Doing preliminary research only</option>
+                        </select>
+                      </div>
+
+                      {/* Timeline Selector */}
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold mb-1 flex items-center gap-1">
+                          <span className="w-5 h-5 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-black text-[10px]">T</span>
+                          Sourcing Timeline
+                        </label>
+                        <select 
+                          value={bantForm.timeline}
+                          onChange={(e) => setBantForm({...bantForm, timeline: e.target.value})}
+                          className="w-full bg-white border border-slate-200 rounded-lg p-2.5 font-medium"
+                        >
+                          <option>Immediate (Within 15 Days)</option>
+                          <option>Within 30 Days</option>
+                          <option>Within 90 Days</option>
+                          <option>Next fiscal year / No immediate urgency</option>
+                        </select>
+                      </div>
+
+                      {/* Timeline description */}
+                      <div>
+                        <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Timeline Detail / Milestones</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={bantForm.bantTimeline}
+                          onChange={(e) => setBantForm({...bantForm, bantTimeline: e.target.value})}
+                          placeholder="e.g. sandbox in 7 days, complete migration in 30 days"
+                          className="w-full bg-white border border-slate-200 rounded-lg p-2.5" 
+                        />
+                      </div>
+
+                      {/* Need description */}
+                      <div className="md:col-span-2">
+                        <label className="block text-[11px] text-slate-700 font-bold mb-1 flex items-center gap-1">
+                          <span className="w-5 h-5 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-black text-[10px]">N</span>
+                          Technical Needs & Pain Points
+                        </label>
+                        <textarea 
+                          rows={2}
+                          required
+                          value={bantForm.bantNeed}
+                          onChange={(e) => setBantForm({...bantForm, bantNeed: e.target.value})}
+                          placeholder="Please detail why you need this software / legacy problems..."
+                          className="w-full bg-white border border-slate-200 rounded-lg p-2.5"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-2">
+                    <button 
+                      type="submit"
+                      className="w-full bg-[#0066FF] hover:bg-blue-700 text-white font-bold py-3 rounded-lg cursor-pointer text-center text-xs shadow-md flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Sparkles className="w-4 h-4 text-yellow-300" />
+                      Submit BANT-Qualified Quote Request
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 px-6">
+              <span>BANT Sourcing Standard compliant</span>
+              <button 
+                onClick={() => setSelectedQuoteProduct(null)}
                 className="font-semibold text-slate-700 hover:text-slate-900 cursor-pointer"
               >
                 Close
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 

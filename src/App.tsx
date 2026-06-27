@@ -662,6 +662,34 @@ export default function App() {
         body: JSON.stringify(leadData)
       });
       if (res.ok) {
+        if (isSupabaseConfigured) {
+          const leadId = `lead-${Date.now()}`;
+          const supabaseLead = {
+            id: leadId,
+            title: leadData.title,
+            category: leadData.category,
+            description: leadData.description,
+            budget: leadData.budget,
+            companyName: leadData.companyName,
+            contactName: leadData.contactName,
+            mobile: leadData.mobile,
+            email: leadData.email,
+            city: leadData.city,
+            timeline: leadData.timeline,
+            status: "Submitted",
+            bant: {
+              budget: leadData.bantBudget || "Stated Budget matches expected pricing",
+              authority: leadData.bantAuthority || "Evaluating IT Decision Maker",
+              need: leadData.bantNeed || "Confirmed requirement for software suite",
+              timeline: leadData.bantTimeline || "Planned implementation within timeline"
+            },
+            assignedVendors: []
+          };
+          const { error } = await supabase.from("leads").insert([supabaseLead]);
+          if (error) {
+            console.error("Supabase lead insertion error:", error);
+          }
+        }
         fetchAllData();
       }
     } catch (err) {
@@ -1413,6 +1441,8 @@ export default function App() {
                 transition={{ duration: 0.25 }}
               >
                 <HomeView
+                  currentUser={currentUser}
+                  onPostLead={handlePostLead}
                   categories={categories}
                   products={products}
                   vendors={vendors}
@@ -1732,11 +1762,7 @@ export default function App() {
                   <div className="space-y-4">
                     <div>
                       <p className="font-bold text-slate-400 uppercase text-[10px]">Registered HQ Address</p>
-                      <p className="font-semibold text-slate-800 mt-1">BANTConfirm Corporate Hub, BKC, Mumbai, MH, 400051</p>
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-400 uppercase text-[10px]">Registry Audit Helpline</p>
-                      <p className="font-semibold text-[#0066FF] mt-1">+91 (022) 5555 7777</p>
+                      <p className="font-semibold text-slate-800 mt-1">BANTConfirm Corporate Hub, Sector 62, Noida, UP, 201301</p>
                     </div>
                     <div>
                       <p className="font-bold text-slate-400 uppercase text-[10px]">Corporate Enquiries</p>
