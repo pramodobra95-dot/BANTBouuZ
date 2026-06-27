@@ -699,6 +699,92 @@ if (databaseUrl) {
   });
 }
 
+async function resilientInsertProfile(newUser: any, customClient?: any) {
+  const runner = customClient || pgPool;
+  if (!runner) return;
+  try {
+    // Try case-sensitive/quoted schema
+    await runner.query(
+      `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, "companyName" = EXCLUDED."companyName", mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
+      [newUser.id, newUser.name, newUser.email, newUser.companyName || "", newUser.mobile || "", newUser.city || "", newUser.role || "buyer", newUser.createdAt || new Date().toISOString()]
+    );
+  } catch (err: any) {
+    console.warn("[DB WARNING] Quoted profiles insert failed, trying folded lowercase fallback:", err.message || err);
+    try {
+      // Try folded/lowercase/unquoted schema
+      await runner.query(
+        `INSERT INTO profiles (id, name, email, companyName, mobile, city, role, createdAt)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, companyName = EXCLUDED.companyName, mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
+        [newUser.id, newUser.name, newUser.email, newUser.companyName || "", newUser.mobile || "", newUser.city || "", newUser.role || "buyer", newUser.createdAt || new Date().toISOString()]
+      );
+    } catch (err2: any) {
+      console.error("[DB ERROR] Both profiles inserts failed:", err2.message || err2);
+    }
+  }
+}
+
+async function resilientInsertLead(newLead: any, customClient?: any) {
+  const runner = customClient || pgPool;
+  if (!runner) return;
+  try {
+    // Try Supabase-style schema first (quoted case-sensitive and matching supabase_setup.sql)
+    await runner.query(
+      `INSERT INTO leads (id, title, category, description, budget, "companyName", "contactName", mobile, email, city, timeline, status, bant, "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, category = EXCLUDED.category, status = EXCLUDED.status`,
+      [
+        newLead.id,
+        newLead.title || "Software Sourcing Requirement",
+        newLead.category,
+        newLead.description || "",
+        newLead.budget || "",
+        newLead.companyName || "",
+        newLead.contactName || "",
+        newLead.mobile || "",
+        newLead.email || "",
+        newLead.city || "Delhi",
+        newLead.timeline || "",
+        newLead.status || "Submitted",
+        JSON.stringify(newLead.bant || {}),
+        newLead.createdAt || new Date().toISOString()
+      ]
+    );
+  } catch (err: any) {
+    console.warn("[DB WARNING] Quoted/Supabase-style leads insert failed, trying local fallback schema:", err.message || err);
+    try {
+      // Try local fallback schema (unquoted lowercase folded)
+      await runner.query(
+        `INSERT INTO leads (id, buyerName, buyerCompany, buyerEmail, buyerPhone, category, budget, authority, need, timeline, description, score, status, createdAt, title, city)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         ON CONFLICT (id) DO UPDATE SET buyerName = EXCLUDED.buyerName, buyerCompany = EXCLUDED.buyerCompany, status = EXCLUDED.status`,
+        [
+          newLead.id,
+          newLead.contactName || "",
+          newLead.companyName || "",
+          newLead.email || "",
+          newLead.mobile || "",
+          newLead.category || "",
+          newLead.budget || "",
+          newLead.bant?.authority || "Yes",
+          newLead.bant?.need || newLead.description || "",
+          newLead.timeline || "",
+          newLead.description || "",
+          80,
+          newLead.status || "Submitted",
+          newLead.createdAt || new Date().toISOString(),
+          newLead.title || "Software Sourcing Requirement",
+          newLead.city || "Delhi"
+        ]
+      );
+    } catch (err2: any) {
+      console.error("[DB ERROR] Both leads inserts failed:", err2.message || err2);
+    }
+  }
+}
+
 async function initPostgres() {
   if (!pgPool) {
     console.log("No PostgreSQL DATABASE_URL detected. Running with local JSON fallback.");
@@ -946,11 +1032,7 @@ async function initPostgres() {
     if (parseInt(leadCheck.rows[0].count) === 0) {
       console.log("Seeding initial leads to Postgres...");
       for (const l of defaultLeads) {
-        await client.query(
-          `INSERT INTO leads (id, buyerName, buyerCompany, buyerEmail, buyerPhone, category, budget, authority, need, timeline, description, score, status, createdAt)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-          [l.id, l.contactName, l.companyName, l.email, l.mobile, l.category, l.budget, l.bant?.authority || "Yes", l.bant?.need || "", l.timeline, l.description, 80, l.status, l.createdAt]
-        );
+        await resilientInsertLead(l, client);
       }
     }
 
@@ -1041,11 +1123,7 @@ async function initPostgres() {
     if (parseInt(profilesCheck.rows[0].count) === 0) {
       console.log("Seeding initial profiles to Postgres...");
       for (const u of defaultUsers) {
-        await client.query(
-          `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [u.id, u.name, u.email, u.companyName || "", u.mobile || "", u.city || "", u.role || "buyer", u.createdAt || new Date().toISOString()]
-        );
+        await resilientInsertProfile(u, client);
       }
     }
 
@@ -1766,12 +1844,7 @@ app.post("/api/auth/register-partner", async (req, res) => {
 
   if (pgPool) {
     try {
-      await pgPool.query(
-        `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, "companyName" = EXCLUDED."companyName", mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
-        [newUser.id, newUser.name, newUser.email, newUser.companyName, newUser.mobile, newUser.city, newUser.role, newUser.createdAt]
-      );
+      await resilientInsertProfile(newUser);
       
       await pgPool.query(
         `INSERT INTO vendors (id, companyName, name, logo, gstNumber, panNumber, website, businessCategory, productsOffered, rating, location, approved, docVerified, plan, productsCount, leadsCount, revenue, viewsCount, createdAt) 
@@ -1867,18 +1940,7 @@ app.post("/api/auth/signup", async (req, res) => {
     sendBuyerWelcomeEmail(newUser.name, newUser.email).catch(console.error);
   }
   
-  if (pgPool) {
-    try {
-      await pgPool.query(
-        `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, "companyName" = EXCLUDED."companyName", mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
-        [newUser.id, newUser.name, newUser.email, newUser.companyName, newUser.mobile, newUser.city, newUser.role, newUser.createdAt]
-      );
-    } catch (err) {
-      console.error("Error inserting user profile to postgres during signup:", err);
-    }
-  }
+  await resilientInsertProfile(newUser);
 
   saveDb();
   res.json({ success: true, user: newUser });
@@ -2172,10 +2234,22 @@ app.delete("/api/vendors/:id", (req, res) => {
 app.get("/api/users", async (req, res) => {
   if (pgPool) {
     try {
-      const q = await pgPool.query('SELECT * FROM profiles ORDER BY "createdAt" DESC');
-      return res.json(q.rows);
-    } catch (err) {
-      console.error("Error querying users from postgres:", err);
+      const q = await pgPool.query('SELECT * FROM profiles');
+      const rows = q.rows.map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        companyName: u.companyname || u.companyName || "",
+        mobile: u.mobile,
+        city: u.city,
+        role: u.role || "buyer",
+        createdAt: u.createdat || u.createdAt || ""
+      }));
+      // Sort in Javascript to be 100% case-insensitive and case-agnostic
+      rows.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      return res.json(rows);
+    } catch (err: any) {
+      console.error("Error querying users from postgres, falling back to local JSON database:", err.message || err);
     }
   }
   res.json(db.users || []);
@@ -2197,18 +2271,7 @@ app.post("/api/users", async (req, res) => {
   db.users.push(newUser);
   saveDb();
 
-  if (pgPool) {
-    try {
-      await pgPool.query(
-        `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, "companyName" = EXCLUDED."companyName", mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
-        [newUser.id, newUser.name, newUser.email, newUser.companyName, newUser.mobile, newUser.city, newUser.role, newUser.createdAt]
-      );
-    } catch (err) {
-      console.error("Error inserting user to postgres:", err);
-    }
-  }
+  await resilientInsertProfile(newUser);
 
   res.status(201).json(newUser);
 });
@@ -2262,31 +2325,49 @@ app.get("/api/leads", async (req, res) => {
 
   if (pgPool) {
     try {
-      const q = await pgPool.query("SELECT * FROM leads ORDER BY createdAt DESC");
-      let list = q.rows.map(l => ({
-        id: l.id,
-        title: l.title || l.description?.split('\n')[0] || "Software Sourcing Requirement",
-        category: l.category,
-        description: l.description,
-        budget: l.budget,
-        companyName: l.buyercompany || l.buyerCompany || "",
-        contactName: l.buyername || l.buyerName || "",
-        mobile: l.buyerphone || l.buyerPhone || "",
-        email: l.buyeremail || l.buyerEmail || "",
-        city: l.city || "Delhi",
-        timeline: l.timeline,
-        status: l.status || 'Submitted',
-        bant: {
-          budget: l.budget || "",
-          authority: l.authority || "Yes",
-          need: l.need || l.description || "",
-          timeline: l.timeline || ""
-        },
-        assignedVendors: [],
-        createdAt: l.createdat || l.createdAt
-      }));
+      // Query without database-level ordering to avoid Case-Sensitivity issues with createdAt/createdat
+      const q = await pgPool.query("SELECT * FROM leads");
+      let list = q.rows.map(l => {
+        // Unify both local schema and Supabase schema properties
+        const budgetVal = l.budget || "";
+        const descVal = l.description || "";
+        const timelineVal = l.timeline || "";
+        const titleVal = l.title || descVal?.split('\n')[0] || "Software Sourcing Requirement";
+        const company = l.buyercompany || l.buyerCompany || l.companyName || "";
+        const contact = l.buyername || l.buyerName || l.contactName || "";
+        const phone = l.buyerphone || l.buyerPhone || l.mobile || "";
+        const emailVal = l.buyeremail || l.buyerEmail || l.email || "";
+        const createdAtVal = l.createdat || l.createdAt || "";
+
+        return {
+          id: l.id,
+          title: titleVal,
+          category: l.category,
+          description: descVal,
+          budget: budgetVal,
+          companyName: company,
+          contactName: contact,
+          mobile: phone,
+          email: emailVal,
+          city: l.city || "Delhi",
+          timeline: timelineVal,
+          status: l.status || 'Submitted',
+          bant: {
+            budget: budgetVal,
+            authority: l.authority || "Yes",
+            need: l.need || descVal || "Confirmed requirement",
+            timeline: timelineVal
+          },
+          assignedVendors: [],
+          createdAt: createdAtVal
+        };
+      });
+
+      // Sort in JavaScript
+      list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
       if (vendorId) {
+        // Query assignments safely
         const laQuery = await pgPool.query("SELECT * FROM lead_assignments WHERE vendorId = $1", [vendorId]);
         const leadAssignments = laQuery.rows;
         const assignedIds = leadAssignments.map(la => la.leadid || la.leadId);
@@ -2298,8 +2379,8 @@ app.get("/api/leads", async (req, res) => {
         }));
       }
       return res.json(list);
-    } catch (err) {
-      console.error("Error querying leads from postgres:", err);
+    } catch (err: any) {
+      console.error("Error querying leads from postgres, falling back to local JSON database:", err.message || err);
     }
   }
 
@@ -2359,11 +2440,7 @@ app.post("/api/leads", async (req, res) => {
 
   if (pgPool) {
     try {
-      await pgPool.query(
-        `INSERT INTO leads (id, buyerName, buyerCompany, buyerEmail, buyerPhone, category, budget, authority, need, timeline, description, score, status, createdAt, title, city)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-        [newLead.id, newLead.contactName, newLead.companyName, newLead.email, newLead.mobile, newLead.category, newLead.budget, newLead.bant?.authority || "Yes", newLead.bant?.need || "", newLead.timeline, newLead.description, 80, newLead.status, newLead.createdAt, newLead.title, newLead.city]
-      );
+      await resilientInsertLead(newLead);
       
       await pgPool.query(
         `INSERT INTO notifications (id, title, message, type, read, createdAt)
@@ -2371,7 +2448,7 @@ app.post("/api/leads", async (req, res) => {
         [notif.id, notif.title, notif.message, "Alert", notif.read, notif.createdAt]
       );
     } catch (err) {
-      console.error("Error inserting lead to postgres:", err);
+      console.error("Error inserting notifications for lead to postgres:", err);
     }
   }
 
