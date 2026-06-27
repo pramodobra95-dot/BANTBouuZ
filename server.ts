@@ -855,6 +855,28 @@ async function initPostgres() {
       )
     `);
 
+    // 11. Create profiles table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS profiles (
+        id VARCHAR(100) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) NOT NULL,
+        "companyName" VARCHAR(200),
+        mobile VARCHAR(50),
+        city VARCHAR(100),
+        role VARCHAR(50) DEFAULT 'buyer',
+        "createdAt" VARCHAR(100)
+      )
+    `);
+
+    // Ensure leads table has title and city columns
+    try {
+      await client.query("ALTER TABLE leads ADD COLUMN IF NOT EXISTS title VARCHAR(200)");
+      await client.query("ALTER TABLE leads ADD COLUMN IF NOT EXISTS city VARCHAR(100)");
+    } catch (err) {
+      console.warn("Could not alter leads table to add title and city:", err);
+    }
+
     console.log("PostgreSQL tables checked/created.");
 
     // Ensure Row Level Security is disabled for local and client operations to prevent any RLS policy errors
@@ -870,7 +892,8 @@ async function initPostgres() {
         "testimonials",
         "settings",
         "notifications",
-        "lead_assignments"
+        "lead_assignments",
+        "profiles"
       ];
       for (const table of rlsTables) {
         await client.query(`ALTER TABLE IF EXISTS public.${table} DISABLE ROW LEVEL SECURITY`).catch(() => {});
@@ -1009,6 +1032,19 @@ async function initPostgres() {
           `INSERT INTO lead_assignments (id, leadId, vendorId, status, purchased, createdAt)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [la.id, la.leadId, la.vendorId, la.status, la.purchased, la.createdAt]
+        );
+      }
+    }
+
+    // Seed profiles (users) if empty
+    const profilesCheck = await client.query("SELECT COUNT(*) FROM profiles");
+    if (parseInt(profilesCheck.rows[0].count) === 0) {
+      console.log("Seeding initial profiles to Postgres...");
+      for (const u of defaultUsers) {
+        await client.query(
+          `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [u.id, u.name, u.email, u.companyName || "", u.mobile || "", u.city || "", u.role || "buyer", u.createdAt || new Date().toISOString()]
         );
       }
     }
@@ -1422,60 +1458,83 @@ app.get("/api/auth/me", (req, res) => {
 });
 
 // API - Log in
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { email, password, role } = req.body;
   let user: any = null;
   
-  if (email === "buyer@bantconfirm.com" || role === "buyer") {
-    user = {
-      id: "user-demo",
-      name: "Anand Sen",
-      email: "anand@zenithedu.com",
-      companyName: "Zenith Education Ltd",
-      mobile: "+91 98888 77777",
-      city: "Mumbai",
-      gstNumber: "27AAAAA1111A1Z1",
-      businessType: "SME Services",
-      role: "buyer"
-    };
-  } else if (email === "vendor@bantconfirm.com" || role === "vendor") {
-    user = {
-      id: "ven-1",
-      name: "Rajesh Kumar",
-      email: "rajesh@saasify.co.in",
-      companyName: "SaaSify Solutions Pvt Ltd",
-      mobile: "+91 99999 88888",
-      city: "Mumbai",
-      gstNumber: "27AAAAA1111A1Z1",
-      businessType: "Solution Provider",
-      role: "vendor",
-      vendorId: "ven-1"
-    };
-  } else if (email === "admin@bantconfirm.com" || email === "info.bouuz@gmail.com" || email === "info.bouuz@gmail.co" || email === "pramodobra95@gmail.com" || role === "admin") {
-    user = {
-      id: "admin-demo",
-      name: "Prabhu Deva",
-      email: email || "info.bouuz@gmail.co",
-      companyName: "BANTConfirm HQ",
-      mobile: "+91 94444 12345",
-      city: "Chennai",
-      gstNumber: "33ABCDE1234F1Z0",
-      businessType: "Marketplace Administrator",
-      role: "admin"
-    };
-  } else {
-    // Normal registration fallback
-    user = {
-      id: "user-" + Math.random().toString(36).substr(2, 9),
-      name: email ? email.split("@")[0] : "Enterprise Sourcing Professional",
-      email: email || "sourcing@enterprise.in",
-      companyName: "Guest Enterprise Ltd",
-      mobile: "+91 90000 00000",
-      city: "Mumbai",
-      gstNumber: "27AAAAA1111A1Z1",
-      businessType: "SME Services",
-      role: role || "buyer"
-    };
+  if (pgPool && email) {
+    try {
+      const q = await pgPool.query('SELECT * FROM profiles WHERE LOWER(email) = $1 LIMIT 1', [email.trim().toLowerCase()]);
+      if (q.rows.length > 0) {
+        const row = q.rows[0];
+        user = {
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          companyName: row.companyName,
+          mobile: row.mobile,
+          city: row.city,
+          role: row.role,
+          createdAt: row.createdAt
+        };
+      }
+    } catch (err) {
+      console.error("Error finding user during login:", err);
+    }
+  }
+
+  if (!user) {
+    if (email === "buyer@bantconfirm.com" || role === "buyer") {
+      user = {
+        id: "user-demo",
+        name: "Anand Sen",
+        email: "anand@zenithedu.com",
+        companyName: "Zenith Education Ltd",
+        mobile: "+91 98888 77777",
+        city: "Mumbai",
+        gstNumber: "27AAAAA1111A1Z1",
+        businessType: "SME Services",
+        role: "buyer"
+      };
+    } else if (email === "vendor@bantconfirm.com" || role === "vendor") {
+      user = {
+        id: "ven-1",
+        name: "Rajesh Kumar",
+        email: "rajesh@saasify.co.in",
+        companyName: "SaaSify Solutions Pvt Ltd",
+        mobile: "+91 99999 88888",
+        city: "Mumbai",
+        gstNumber: "27AAAAA1111A1Z1",
+        businessType: "Solution Provider",
+        role: "vendor",
+        vendorId: "ven-1"
+      };
+    } else if (email === "admin@bantconfirm.com" || email === "info.bouuz@gmail.com" || email === "info.bouuz@gmail.co" || email === "pramodobra95@gmail.com" || role === "admin") {
+      user = {
+        id: "admin-demo",
+        name: "Prabhu Deva",
+        email: email || "info.bouuz@gmail.co",
+        companyName: "BANTConfirm HQ",
+        mobile: "+91 94444 12345",
+        city: "Chennai",
+        gstNumber: "33ABCDE1234F1Z0",
+        businessType: "Marketplace Administrator",
+        role: "admin"
+      };
+    } else {
+      // Normal registration fallback
+      user = {
+        id: "user-" + Math.random().toString(36).substr(2, 9),
+        name: email ? email.split("@")[0] : "Enterprise Sourcing Professional",
+        email: email || "sourcing@enterprise.in",
+        companyName: "Guest Enterprise Ltd",
+        mobile: "+91 90000 00000",
+        city: "Mumbai",
+        gstNumber: "27AAAAA1111A1Z1",
+        businessType: "SME Services",
+        role: role || "buyer"
+      };
+    }
   }
   
   db.currentUser = user;
@@ -1488,7 +1547,7 @@ app.post("/api/auth/login", (req, res) => {
 });
 
 // API - Register Partner (With Auto-Onboarding & Emails)
-app.post("/api/auth/register-partner", (req, res) => {
+app.post("/api/auth/register-partner", async (req, res) => {
   const { name, companyName, mobile, email, products, description } = req.body;
   const vendorId = `ven-${Date.now()}`;
   const userId = `user-${Date.now()}`;
@@ -1538,21 +1597,48 @@ app.post("/api/auth/register-partner", (req, res) => {
 
   // Add system notifications
   if (!db.notifications) db.notifications = [];
-  db.notifications.unshift({
+  const notif = {
     id: `notif-${Date.now()}`,
     userId: userId,
     title: "Welcome to BANTConfirm!",
     message: "You have registered as a Certified Partner. Welcome Email & Confirmation has been dispatched.",
     read: false,
     createdAt: new Date().toISOString()
-  });
+  };
+  db.notifications.unshift(notif);
+
+  if (pgPool) {
+    try {
+      await pgPool.query(
+        `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, "companyName" = EXCLUDED."companyName", mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
+        [newUser.id, newUser.name, newUser.email, newUser.companyName, newUser.mobile, newUser.city, newUser.role, newUser.createdAt]
+      );
+      
+      await pgPool.query(
+        `INSERT INTO vendors (id, companyName, name, logo, gstNumber, panNumber, website, businessCategory, productsOffered, rating, location, approved, docVerified, plan, productsCount, leadsCount, revenue, viewsCount, createdAt) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+         ON CONFLICT (id) DO UPDATE SET companyName = EXCLUDED.companyName, name = EXCLUDED.name`,
+        [newVen.id, newVen.companyName, newVen.name, newVen.logo, newVen.gstNumber, newVen.panNumber, newVen.website, newVen.businessCategory, JSON.stringify(newVen.productsOffered), newVen.rating, newVen.location, newVen.approved, newVen.docVerified, newVen.plan, newVen.productsCount, newVen.leadsCount, newVen.revenue, newVen.viewsCount, newVen.createdAt]
+      );
+
+      await pgPool.query(
+        `INSERT INTO notifications (id, title, message, type, read, createdAt)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [notif.id, notif.title, notif.message, "Alert", notif.read, notif.createdAt]
+      );
+    } catch (err) {
+      console.error("Error inserting register-partner to postgres:", err);
+    }
+  }
 
   saveDb();
   res.status(201).json({ success: true, user: newUser, vendor: newVen });
 });
 
 // API - Sign Up
-app.post("/api/auth/signup", (req, res) => {
+app.post("/api/auth/signup", async (req, res) => {
   const { name, email, companyName, mobile, city, role } = req.body;
   const emailLower = email ? email.trim().toLowerCase() : "";
   let assignedRole = role || "buyer";
@@ -1603,6 +1689,19 @@ app.post("/api/auth/signup", (req, res) => {
     };
     db.vendors.push(newVen);
     
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          `INSERT INTO vendors (id, companyName, name, logo, gstNumber, panNumber, website, businessCategory, productsOffered, rating, location, approved, docVerified, plan, productsCount, leadsCount, revenue, viewsCount, createdAt) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+           ON CONFLICT (id) DO UPDATE SET companyName = EXCLUDED.companyName, name = EXCLUDED.name`,
+          [newVen.id, newVen.companyName, newVen.name, newVen.logo, newVen.gstNumber, newVen.panNumber, newVen.website, newVen.businessCategory, JSON.stringify(newVen.productsOffered), newVen.rating, newVen.location, newVen.approved, newVen.docVerified, newVen.plan, newVen.productsCount, newVen.leadsCount, newVen.revenue, newVen.viewsCount, newVen.createdAt]
+        );
+      } catch (err) {
+        console.error("Error inserting vendor to postgres:", err);
+      }
+    }
+
     // Dispatch Welcome & Admin emails via Resend
     sendVendorWelcomeEmail(newUser.name, newVen.companyName, newUser.email).catch(console.error);
     sendVendorRegisterAdminAlert(newVen).catch(console.error);
@@ -1611,6 +1710,19 @@ app.post("/api/auth/signup", (req, res) => {
     sendBuyerWelcomeEmail(newUser.name, newUser.email).catch(console.error);
   }
   
+  if (pgPool) {
+    try {
+      await pgPool.query(
+        `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, "companyName" = EXCLUDED."companyName", mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
+        [newUser.id, newUser.name, newUser.email, newUser.companyName, newUser.mobile, newUser.city, newUser.role, newUser.createdAt]
+      );
+    } catch (err) {
+      console.error("Error inserting user profile to postgres during signup:", err);
+    }
+  }
+
   saveDb();
   res.json({ success: true, user: newUser });
 });
@@ -1900,11 +2012,19 @@ app.delete("/api/vendors/:id", (req, res) => {
 });
 
 // Users Management API
-app.get("/api/users", (req, res) => {
+app.get("/api/users", async (req, res) => {
+  if (pgPool) {
+    try {
+      const q = await pgPool.query('SELECT * FROM profiles ORDER BY "createdAt" DESC');
+      return res.json(q.rows);
+    } catch (err) {
+      console.error("Error querying users from postgres:", err);
+    }
+  }
   res.json(db.users || []);
 });
 
-app.post("/api/users", (req, res) => {
+app.post("/api/users", async (req, res) => {
   const u = req.body;
   const newUser = {
     id: u.id || "user-" + Math.random().toString(36).substr(2, 9),
@@ -1919,25 +2039,60 @@ app.post("/api/users", (req, res) => {
   if (!db.users) db.users = [];
   db.users.push(newUser);
   saveDb();
+
+  if (pgPool) {
+    try {
+      await pgPool.query(
+        `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, "companyName" = EXCLUDED."companyName", mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
+        [newUser.id, newUser.name, newUser.email, newUser.companyName, newUser.mobile, newUser.city, newUser.role, newUser.createdAt]
+      );
+    } catch (err) {
+      console.error("Error inserting user to postgres:", err);
+    }
+  }
+
   res.status(201).json(newUser);
 });
 
-app.put("/api/users/:id", (req, res) => {
+app.put("/api/users/:id", async (req, res) => {
   const idx = db.users?.findIndex(u => u.id === req.params.id);
   if (idx !== -1 && db.users) {
     db.users[idx] = { ...db.users[idx], ...req.body };
     saveDb();
+
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          `UPDATE profiles SET name = $1, email = $2, "companyName" = $3, mobile = $4, city = $5, role = $6 WHERE id = $7`,
+          [db.users[idx].name, db.users[idx].email, db.users[idx].companyName, db.users[idx].mobile, db.users[idx].city, db.users[idx].role, req.params.id]
+        );
+      } catch (err) {
+        console.error("Error updating user in postgres:", err);
+      }
+    }
+
     res.json(db.users[idx]);
   } else {
     res.status(404).json({ error: "User not found" });
   }
 });
 
-app.delete("/api/users/:id", (req, res) => {
+app.delete("/api/users/:id", async (req, res) => {
   const idx = db.users?.findIndex(u => u.id === req.params.id);
   if (idx !== -1 && db.users) {
     const deletedUser = db.users.splice(idx, 1)[0];
     saveDb();
+
+    if (pgPool) {
+      try {
+        await pgPool.query("DELETE FROM profiles WHERE id = $1", [req.params.id]);
+      } catch (err) {
+        console.error("Error deleting user from postgres:", err);
+      }
+    }
+
     res.json(deletedUser);
   } else {
     res.status(404).json({ error: "User not found" });
@@ -1945,12 +2100,53 @@ app.delete("/api/users/:id", (req, res) => {
 });
 
 // Leads API
-app.get("/api/leads", (req, res) => {
+app.get("/api/leads", async (req, res) => {
   const { vendorId } = req.query;
+
+  if (pgPool) {
+    try {
+      const q = await pgPool.query("SELECT * FROM leads ORDER BY createdAt DESC");
+      let list = q.rows.map(l => ({
+        id: l.id,
+        title: l.title || l.description?.split('\n')[0] || "Software Sourcing Requirement",
+        category: l.category,
+        description: l.description,
+        budget: l.budget,
+        companyName: l.buyercompany || l.buyerCompany || "",
+        contactName: l.buyername || l.buyerName || "",
+        mobile: l.buyerphone || l.buyerPhone || "",
+        email: l.buyeremail || l.buyerEmail || "",
+        city: l.city || "Delhi",
+        timeline: l.timeline,
+        status: l.status || 'Submitted',
+        bant: {
+          budget: l.budget || "",
+          authority: l.authority || "Yes",
+          need: l.need || l.description || "",
+          timeline: l.timeline || ""
+        },
+        assignedVendors: [],
+        createdAt: l.createdat || l.createdAt
+      }));
+
+      if (vendorId) {
+        const laQuery = await pgPool.query("SELECT * FROM lead_assignments WHERE vendorId = $1", [vendorId]);
+        const leadAssignments = laQuery.rows;
+        const assignedIds = leadAssignments.map(la => la.leadid || la.leadId);
+        list = list.map(lead => ({
+          ...lead,
+          isAssignedToMe: assignedIds.includes(lead.id),
+          assignmentStatus: leadAssignments.find(la => (la.leadid || la.leadId) === lead.id)?.status || 'None',
+          isPurchasedByMe: leadAssignments.find(la => (la.leadid || la.leadId) === lead.id)?.purchased || false
+        }));
+      }
+      return res.json(list);
+    } catch (err) {
+      console.error("Error querying leads from postgres:", err);
+    }
+  }
+
   if (vendorId) {
-    // Filter leads that are assigned to this vendor, or submitted but let vendor view all to decide to purchase/claim
-    // In our system, vendors can see all leads in BANT style, and claim them.
-    // Let's return all leads, but mark whether assigned/purchased
     const leadAssignments = db.leadAssignments.filter(la => la.vendorId === vendorId);
     const assignedIds = leadAssignments.map(la => la.leadId);
     
@@ -1967,11 +2163,11 @@ app.get("/api/leads", (req, res) => {
 });
 
 // Create Lead (Post Requirement)
-app.post("/api/leads", (req, res) => {
+app.post("/api/leads", async (req, res) => {
   const l = req.body;
   const newLead = {
     id: l.id || `lead-${Date.now()}`,
-    title: l.title,
+    title: l.title || "Software Sourcing Requirement",
     category: l.category,
     description: l.description,
     budget: l.budget,
@@ -1979,7 +2175,7 @@ app.post("/api/leads", (req, res) => {
     contactName: l.contactName,
     mobile: l.mobile,
     email: l.email,
-    city: l.city,
+    city: l.city || "Delhi",
     timeline: l.timeline,
     status: "Submitted",
     bant: {
@@ -1994,14 +2190,33 @@ app.post("/api/leads", (req, res) => {
   db.leads.push(newLead);
   
   // Create notifications
-  db.notifications.push({
+  const notif = {
     id: `not-${Date.now()}`,
     userId: "buyer-demo",
     title: "Requirement Posted",
     message: `Your requirement for '${l.title}' has been received and matches dynamic validation.`,
     read: false,
     createdAt: new Date().toISOString()
-  });
+  };
+  db.notifications.push(notif);
+
+  if (pgPool) {
+    try {
+      await pgPool.query(
+        `INSERT INTO leads (id, buyerName, buyerCompany, buyerEmail, buyerPhone, category, budget, authority, need, timeline, description, score, status, createdAt, title, city)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+        [newLead.id, newLead.contactName, newLead.companyName, newLead.email, newLead.mobile, newLead.category, newLead.budget, newLead.bant?.authority || "Yes", newLead.bant?.need || "", newLead.timeline, newLead.description, 80, newLead.status, newLead.createdAt, newLead.title, newLead.city]
+      );
+      
+      await pgPool.query(
+        `INSERT INTO notifications (id, title, message, type, read, createdAt)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [notif.id, notif.title, notif.message, "Alert", notif.read, notif.createdAt]
+      );
+    } catch (err) {
+      console.error("Error inserting lead to postgres:", err);
+    }
+  }
 
   // Dispatch new enquiry & admin notifications via Resend
   sendNewEnquiryEmail(newLead).catch(console.error);
@@ -2011,7 +2226,7 @@ app.post("/api/leads", (req, res) => {
 });
 
 // Update Lead Status (Admin assigning or Vendor updating deal status)
-app.put("/api/leads/:id", (req, res) => {
+app.put("/api/leads/:id", async (req, res) => {
   const idx = db.leads.findIndex(l => l.id === req.params.id);
   if (idx !== -1) {
     const oldStatus = db.leads[idx].status;
@@ -2026,6 +2241,18 @@ app.put("/api/leads/:id", (req, res) => {
         sendLeadStatusChangeAlert(db.leads[idx], newStatus).catch(console.error);
       } else {
         console.log(`[Resend Muted] User ${db.leads[idx].email} has disabled email notifications.`);
+      }
+    }
+    
+    if (pgPool) {
+      try {
+        const lead = db.leads[idx] as any;
+        await pgPool.query(
+          `UPDATE leads SET status = $1, buyerName = $2, buyerCompany = $3, category = $4, budget = $5, timeline = $6, description = $7, title = $8, city = $9 WHERE id = $10`,
+          [lead.status, lead.contactName || lead.buyerName || "", lead.companyName || lead.buyerCompany || "", lead.category, lead.budget, lead.timeline, lead.description, lead.title || "", lead.city || "Delhi", req.params.id]
+        );
+      } catch (err) {
+        console.error("Error updating lead in postgres:", err);
       }
     }
     
