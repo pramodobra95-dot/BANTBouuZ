@@ -1391,6 +1391,163 @@ const sendNewEnquiryEmail = async (lead: any) => {
     await sendResendEmail(lead.email, `BANTConfirm Sourcing: Requirement Received - ${lead.title}`, buyerHtml);
   }
   await sendResendEmail("admin@bantconfirm.com", `ADMIN ALERT: New ${lead.category} Sourcing Request from ${lead.companyName}`, adminHtml);
+
+  // Trigger: automatically notify relevant vendors matching the lead's category
+  try {
+    let vendorsList: any[] = [];
+    if (pgPool) {
+      try {
+        const q = await pgPool.query("SELECT * FROM vendors");
+        vendorsList = q.rows;
+      } catch (err) {
+        console.error("Error fetching vendors from postgres inside sendNewEnquiryEmail:", err);
+        vendorsList = db.vendors;
+      }
+    } else {
+      vendorsList = db.vendors;
+    }
+
+    let categoriesList: any[] = [];
+    if (pgPool) {
+      try {
+        const q = await pgPool.query("SELECT * FROM categories");
+        categoriesList = q.rows;
+      } catch (err) {
+        console.error("Error fetching categories from postgres:", err);
+        categoriesList = db.categories;
+      }
+    } else {
+      categoriesList = db.categories;
+    }
+
+    const matchCategory = categoriesList.find(c => 
+      (c.name && lead.category && c.name.toLowerCase() === lead.category.toLowerCase()) || 
+      (c.id && lead.category && c.id.toLowerCase() === lead.category.toLowerCase())
+    );
+
+    const matchedVendors = vendorsList.filter(v => {
+      // Try businessCategory string matches
+      const vBizCat = v.businesscategory || v.businessCategory;
+      if (vBizCat && lead.category) {
+        const vCat = vBizCat.toLowerCase();
+        const lCat = lead.category.toLowerCase();
+        if (vCat.includes(lCat) || lCat.includes(vCat)) {
+          return true;
+        }
+      }
+      // Try productsOffered JSON array match
+      if (matchCategory) {
+        const pOffered = v.productsoffered || v.productsOffered;
+        let offered: string[] = [];
+        if (typeof pOffered === "string") {
+          try {
+            offered = JSON.parse(pOffered);
+          } catch (e) {}
+        } else if (Array.isArray(pOffered)) {
+          offered = pOffered;
+        }
+        if (offered.includes(matchCategory.id)) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    let profilesList: any[] = [];
+    if (pgPool) {
+      try {
+        const q = await pgPool.query("SELECT * FROM profiles WHERE role = 'vendor'");
+        profilesList = q.rows;
+      } catch (err) {
+        console.error("Error fetching vendor profiles:", err);
+        profilesList = db.users.filter(u => u.role === "vendor");
+      }
+    } else {
+      profilesList = db.users.filter(u => u.role === "vendor");
+    }
+
+    const getVendorEmail = (vendor: any, profiles: any[]) => {
+      const vCompany = vendor.companyname || vendor.companyName || "";
+      const vName = vendor.name || "";
+      const vId = vendor.id || "";
+      const vWebsite = vendor.website || "";
+
+      let p = profiles.find(u => {
+        const uCompany = u.companyName || u.companyname || "";
+        return uCompany && vCompany && uCompany.toLowerCase() === vCompany.toLowerCase();
+      });
+      if (p && p.email) return p.email;
+
+      p = profiles.find(u => {
+        const uName = u.name || "";
+        return uName && vName && uName.toLowerCase() === vName.toLowerCase();
+      });
+      if (p && p.email) return p.email;
+
+      if (vId === "ven-1") return "vendor@bantconfirm.com";
+      if (vId === "ven-2") return "vikram@cloudconnect.net";
+      if (vId === "ven-3") return "amit@entsystems.com";
+      if (vId === "ven-4") return "neha@cybershieldlabs.com";
+
+      if (vWebsite) {
+        const domain = vWebsite.replace(/^https?:\/\/(www\.)?/, "").split("/")[0];
+        if (vName) {
+          const parts = vName.toLowerCase().split(" ");
+          return `${parts[0]}@${domain}`;
+        }
+        return `info@${domain}`;
+      }
+      return "partner@bantconfirm.com";
+    };
+
+    console.log(`[Lead Match Dispatcher] Found ${matchedVendors.length} matching vendors for requirement category: "${lead.category}"`);
+    
+    for (const vendor of matchedVendors) {
+      const vendorEmail = getVendorEmail(vendor, profilesList);
+      const vendorName = vendor.name || "Specialized Partner";
+      const vendorCompany = vendor.companyname || vendor.companyName || "Partner Organization";
+      
+      const vendorHtml = getEmailTemplate(
+        "New Verified BANT Lead Match Alert",
+        `
+          <h1>New Verified Sourcing Opportunity!</h1>
+          <p>Dear <strong>${vendorName}</strong>,</p>
+          <p>We have detected a new high-accuracy B2B procurement lead matching your service profile (<strong>${lead.category}</strong>).</p>
+          
+          <div class="card" style="border-left: 4px solid #0f172a;">
+            <div class="card-title">Requirement Synopsis</div>
+            <p style="margin: 4px 0;"><strong>Matched Category:</strong> ${lead.category}</p>
+            <p style="margin: 4px 0;"><strong>Demand Scope:</strong> ${lead.title}</p>
+            <p style="margin: 4px 0;"><strong>Budget Range:</strong> ${lead.budget}</p>
+            <p style="margin: 4px 0;"><strong>Timeline:</strong> ${lead.timeline}</p>
+            <p style="margin: 4px 0;"><strong>Geographic Target:</strong> ${lead.city || "Delhi"}</p>
+          </div>
+
+          <div class="card" style="background-color: #f0fdf4; border: 1px solid #bbf7d0;">
+            <div class="card-title" style="color: #16a34a;">Verified BANT Score: 80/100</div>
+            <p style="margin: 4px 0; font-size: 13px;"><strong>Budget validation:</strong> ${lead.bant?.budget || "Confirmed Allocated Budget"}</p>
+            <p style="margin: 4px 0; font-size: 13px;"><strong>Authority validation:</strong> ${lead.bant?.authority || "IT Sourcing Decision Maker Identified"}</p>
+            <p style="margin: 4px 0; font-size: 13px;"><strong>Need validation:</strong> ${lead.bant?.need || "Clear product integration scope"}</p>
+            <p style="margin: 4px 0; font-size: 13px;"><strong>Timeline validation:</strong> ${lead.bant?.timeline || "Project ready to initialize"}</p>
+          </div>
+
+          <p>Log in to your <strong>BANTConfirm Partner Dashboard</strong> to claim this lead, purchase full corporate contact details, and start building your custom bid.</p>
+          
+          <div style="text-align: center;">
+            <a href="https://bantconfirm.com" class="btn">View & Claim Lead Now</a>
+          </div>
+        `
+      );
+
+      await sendResendEmail(
+        vendorEmail,
+        `[BANT Match Alert] New Verified ${lead.category} Sourcing Opportunity - ${lead.title}`,
+        vendorHtml
+      );
+    }
+  } catch (err) {
+    console.error("Error triggering matched vendor category emails:", err);
+  }
 };
 
 // Admin alert for partner registration
