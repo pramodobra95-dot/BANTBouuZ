@@ -342,6 +342,78 @@ export default function App() {
     fetchAllData();
   }, []);
 
+  // Real-time subscriptions for Supabase
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    console.log("Initializing Real-time subscriptions...");
+    const channel = supabase
+      .channel("supabase-realtime-admin")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leads" },
+        (payload: any) => {
+          console.log("Realtime Leads change received:", payload);
+          if (payload.eventType === "INSERT") {
+            const newLead = payload.new;
+            const fullLead = {
+              ...newLead,
+              bant: newLead.bant || { budget: newLead.budget || "", authority: "Yes", need: newLead.description || "", timeline: newLead.timeline || "" }
+            };
+            setLeads((prev) => {
+              if (prev.some((l) => l.id === fullLead.id)) return prev;
+              return [fullLead, ...prev];
+            });
+            // Show dynamic alert notification in UI
+            const notifTitle = `New Lead: ${fullLead.title || "Inquiry"}`;
+            const notifMsg = `A new enquiry has been posted for ${fullLead.category || "category"}. Refresh or view details instantly.`;
+            setNotifications((prev) => [
+              { id: `notif-${Date.now()}`, title: notifTitle, message: notifMsg, read: false, createdAt: new Date().toISOString() },
+              ...prev
+            ]);
+            safeAlert(`New Lead Posted: "${fullLead.title}"`, "success");
+          } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new;
+            setLeads((prev) =>
+              prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l))
+            );
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = payload.old.id;
+            setLeads((prev) => prev.filter((l) => l.id !== deletedId));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        (payload: any) => {
+          console.log("Realtime Profiles change received:", payload);
+          if (payload.eventType === "INSERT") {
+            const newUser = payload.new;
+            setRegisteredUsers((prev) => {
+              if (prev.some((u) => u.id === newUser.id)) return prev;
+              return [...prev, newUser];
+            });
+            safeAlert(`New User Registered: ${newUser.name || newUser.email}`, "success");
+          } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new;
+            setRegisteredUsers((prev) =>
+              prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u))
+            );
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = payload.old.id;
+            setRegisteredUsers((prev) => prev.filter((u) => u.id !== deletedId));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log("Cleaning up Real-time subscriptions...");
+      supabase.removeChannel(channel);
+    };
+  }, [isSupabaseConfigured]);
+
   // Auto-detect role from email to simplify login
   useEffect(() => {
     const emailLower = authEmail.trim().toLowerCase();
@@ -2431,7 +2503,7 @@ export default function App() {
                       } else if (supabaseRlsErrorTable === "profiles") {
                         sql = `-- Fix Row Level Security policies for profiles table\nALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to insert profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to update profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to delete profiles" ON public.profiles;\n\nCREATE POLICY "Allow public read access on profiles" ON public.profiles \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert profiles" ON public.profiles \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update profiles" ON public.profiles \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete profiles" ON public.profiles \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.profiles TO anon, authenticated, service_role;`;
                       } else {
-                        sql = `-- 1. Fix products table RLS and policies\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;\nCREATE POLICY "Allow public read access on products" ON public.products FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert products" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete products" ON public.products FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.products TO anon, authenticated, service_role;\n\n-- 2. Fix categories table RLS and policies\nALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;\nCREATE POLICY "Allow public read access on categories" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update categories" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.categories TO anon, authenticated, service_role;\n\n-- 3. Fix leads table RLS and policies\nALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to insert leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to update leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to delete leads" ON public.leads;\nCREATE POLICY "Allow public read access on leads" ON public.leads FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert leads" ON public.leads FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update leads" ON public.leads FOR UPDATE USING (true);\nCREATE POLICY "Allow anyone to delete leads" ON public.leads FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.leads TO anon, authenticated, service_role;\n\n-- 4. Fix profiles table RLS and policies\nCREATE TABLE IF NOT EXISTS public.profiles (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, "companyName" TEXT, mobile TEXT, city TEXT, role TEXT DEFAULT 'buyer', "createdAt" TIMESTAMPTZ DEFAULT NOW());\nALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to insert profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to update profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to delete profiles" ON public.profiles;\nCREATE POLICY "Allow public read access on profiles" ON public.profiles FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert profiles" ON public.profiles FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update profiles" ON public.profiles FOR UPDATE USING (true);\nCREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.profiles TO anon, authenticated, service_role;`;
+                        sql = `"-- 1. Fix products table RLS and policies\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"Allow public read access on products\" ON public.products;\nDROP POLICY IF EXISTS \"Allow anyone to insert products\" ON public.products;\nDROP POLICY IF EXISTS \"Allow anyone to update products\" ON public.products;\nDROP POLICY IF EXISTS \"Allow anyone to delete products\" ON public.products;\nCREATE POLICY \"Allow public read access on products\" ON public.products FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to insert products\" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY \"Allow anyone to update products\" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to delete products\" ON public.products FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.products TO anon, authenticated, service_role;\n\n-- 2. Fix categories table RLS and policies\nALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"Allow public read access on categories\" ON public.categories;\nDROP POLICY IF EXISTS \"Allow anyone to insert categories\" ON public.categories;\nDROP POLICY IF EXISTS \"Allow anyone to update categories\" ON public.categories;\nDROP POLICY IF EXISTS \"Allow anyone to delete categories\" ON public.categories;\nCREATE POLICY \"Allow public read access on categories\" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to insert categories\" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY \"Allow anyone to update categories\" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to delete categories\" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.categories TO anon, authenticated, service_role;\n\n-- 3. Fix leads table RLS and policies\nALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"Allow public read access on leads\" ON public.leads;\nDROP POLICY IF EXISTS \"Allow anyone to insert leads\" ON public.leads;\nDROP POLICY IF EXISTS \"Allow anyone to update leads\" ON public.leads;\nDROP POLICY IF EXISTS \"Allow anyone to delete leads\" ON public.leads;\nCREATE POLICY \"Allow public read access on leads\" ON public.leads FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to insert leads\" ON public.leads FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY \"Allow anyone to update leads\" ON public.leads FOR UPDATE USING (true);\nCREATE POLICY \"Allow anyone to delete leads\" ON public.leads FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.leads TO anon, authenticated, service_role;\n\n-- 4. Fix profiles table RLS and policies\nCREATE TABLE IF NOT EXISTS public.profiles (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, \"companyName\" TEXT, mobile TEXT, city TEXT, role TEXT DEFAULT 'buyer', \"createdAt\" TIMESTAMPTZ DEFAULT NOW());\nALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"Allow public read access on profiles\" ON public.profiles;\nDROP POLICY IF EXISTS \"Allow anyone to insert profiles\" ON public.profiles;\nDROP POLICY IF EXISTS \"Allow anyone to update profiles\" ON public.profiles;\nDROP POLICY IF EXISTS \"Allow anyone to delete profiles\" ON public.profiles;\nCREATE POLICY \"Allow public read access on profiles\" ON public.profiles FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to insert profiles\" ON public.profiles FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY \"Allow anyone to update profiles\" ON public.profiles FOR UPDATE USING (true);\nCREATE POLICY \"Allow anyone to delete profiles\" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.profiles TO anon, authenticated, service_role;\n\n-- 5. Enable Realtime Replication for instant synchronization\nALTER TABLE public.profiles REPLICA IDENTITY FULL;\nALTER TABLE public.leads REPLICA IDENTITY FULL;\n\nDO $$\nBEGIN\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_publication_tables \n    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'profiles'\n  ) THEN\n    ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_publication_tables \n    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'leads'\n  ) THEN\n    ALTER PUBLICATION supabase_realtime ADD TABLE public.leads;\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_publication_tables \n    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'products'\n  ) THEN\n    ALTER PUBLICATION supabase_realtime ADD TABLE public.products;\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_publication_tables \n    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'categories'\n  ) THEN\n    ALTER PUBLICATION supabase_realtime ADD TABLE public.categories;\n  END IF;\nEND $$;\n`
                       }
                       navigator.clipboard.writeText(sql);
                       safeAlert("SQL Script Copied! Paste this in your Supabase SQL Editor and click Run.", "success");
@@ -2594,7 +2666,11 @@ CREATE POLICY "Allow public read access on profiles" ON public.profiles FOR SELE
 CREATE POLICY "Allow anyone to insert profiles" ON public.profiles FOR INSERT TO public, anon, authenticated WITH CHECK (true);
 CREATE POLICY "Allow anyone to update profiles" ON public.profiles FOR UPDATE USING (true);
 CREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);
-GRANT ALL ON public.profiles TO anon, authenticated, service_role;`
+GRANT ALL ON public.profiles TO anon, authenticated, service_role;
+
+-- 5. Enable Realtime Replication for instant synchronization
+ALTER TABLE public.profiles REPLICA IDENTITY FULL;
+ALTER TABLE public.leads REPLICA IDENTITY FULL;`
                   )}
                 </pre>
               </div>
