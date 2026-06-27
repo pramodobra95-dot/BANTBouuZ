@@ -719,36 +719,61 @@ export default function App() {
 
   // Categories management (Add/Delete)
   const handleAddCategory = async (catData: { name: string; description: string; icon: string }) => {
+    const catId = `cat-${Date.now()}`;
+    const newCat = {
+      id: catId,
+      name: catData.name,
+      description: catData.description,
+      icon: catData.icon || "Layers",
+      productsCount: 0
+    };
+
     try {
       if (isSupabaseConfigured) {
-        const catId = `cat-${Date.now()}`;
-        const newCat = {
-          id: catId,
-          name: catData.name,
-          description: catData.description,
-          icon: catData.icon || "Layers",
-          productsCount: 0
-        };
         const { error } = await supabase.from("categories").insert([newCat]);
         if (error) throw error;
         fetchAllData();
+        safeAlert("Category created successfully in Supabase!", "success");
       } else {
         const res = await fetch("/api/categories", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(catData)
+          body: JSON.stringify(newCat)
         });
         if (res.ok) {
           fetchAllData();
+          safeAlert("Category created successfully!", "success");
         } else {
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || "Failed to create category on local server.");
         }
       }
-      safeAlert("Category created successfully!", "success");
     } catch (err: any) {
-      console.error(err);
-      safeAlert(err.message || "Failed to create category.", "error");
+      console.error("[Add Category Error]:", err);
+      const isRlsError = err.message && (
+        err.message.toLowerCase().includes("row-level security") || 
+        err.message.toLowerCase().includes("policy") || 
+        err.message.toLowerCase().includes("violates") ||
+        err.code === "42501"
+      );
+
+      if (isRlsError && isSupabaseConfigured) {
+        // RESILIENT IN-MEMORY FALLBACK: Add to react state so it shows up on dashboard and admin panel!
+        setCategories(prev => [newCat, ...prev]);
+        
+        // Also save to standard local backend so it's not lost
+        fetch("/api/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newCat)
+        }).catch(e => console.warn("Local storage fallback sync failed:", e));
+
+        setSupabaseRlsErrorTable("categories");
+        setSupabaseRlsErrorOpen(true);
+        safeAlert("Notice: Saved to temporary Memory! Please execute the Supabase SQL script shown on screen to allow permanent saves.", "warning");
+      } else {
+        safeAlert(err.message || "Failed to create category.", "error");
+      }
     }
   };
 
@@ -758,19 +783,39 @@ export default function App() {
         const { error } = await supabase.from("categories").delete().eq("id", catId);
         if (error) throw error;
         fetchAllData();
+        safeAlert("Category deleted successfully from Supabase!", "success");
       } else {
         const res = await fetch(`/api/categories/${catId}`, { method: "DELETE" });
         if (res.ok) {
           fetchAllData();
+          safeAlert("Category deleted successfully!", "success");
         } else {
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error || "Failed to delete category on local server.");
         }
       }
-      safeAlert("Category deleted successfully!", "success");
     } catch (err: any) {
-      console.error(err);
-      safeAlert(err.message || "Failed to delete category.", "error");
+      console.error("[Delete Category Error]:", err);
+      const isRlsError = err.message && (
+        err.message.toLowerCase().includes("row-level security") || 
+        err.message.toLowerCase().includes("policy") || 
+        err.message.toLowerCase().includes("violates") ||
+        err.code === "42501"
+      );
+
+      if (isRlsError && isSupabaseConfigured) {
+        // UI memory fallback
+        setCategories(prev => prev.filter(c => c.id !== catId));
+        fetch(`/api/categories/${catId}`, {
+          method: "DELETE"
+        }).catch(e => console.warn("Local sync failed:", e));
+
+        setSupabaseRlsErrorTable("categories");
+        setSupabaseRlsErrorOpen(true);
+        safeAlert("Deleted from temporary Memory! Please fix Supabase RLS policies.", "warning");
+      } else {
+        safeAlert(err.message || "Failed to delete category.", "error");
+      }
     }
   };
 
@@ -2248,11 +2293,48 @@ export default function App() {
                   💡 Why am I seeing this?
                 </p>
                 <p className="text-[11px] leading-relaxed text-slate-300">
-                  You connected Supabase successfully to your Vercel/live environment. However, Supabase's table security policy (Row-Level Security) is currently blockading anonymous write requests (inserts, updates, or deletes) from the frontend client.
+                  You connected Supabase successfully to your live environment. However, Supabase's table security policy (Row-Level Security) is currently blocking anonymous write requests (inserts, updates, or deletes) from the frontend client.
                 </p>
                 <p className="text-[11px] font-bold text-slate-200">
-                  Resilient Fallback Active: We have loaded your product inside the UI memory so it immediately shows up in your Admin Panel & Users' Dashboard! But to make it permanent, execute the query below in Supabase.
+                  Resilient Fallback Active: We have loaded your item inside the UI memory so it immediately shows up in your Admin Panel & Users' Dashboard! But to make it permanent, execute the query below in Supabase.
                 </p>
+              </div>
+
+              {/* Table Switcher Tabs */}
+              <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSupabaseRlsErrorTable("products")}
+                  className={`flex-1 py-1.5 text-center text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                    supabaseRlsErrorTable === "products" 
+                      ? "bg-[#0066FF] text-white shadow-sm" 
+                      : "text-slate-400 hover:text-white hover:bg-slate-900"
+                  }`}
+                >
+                  Products SQL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSupabaseRlsErrorTable("categories")}
+                  className={`flex-1 py-1.5 text-center text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                    supabaseRlsErrorTable === "categories" 
+                      ? "bg-[#0066FF] text-white shadow-sm" 
+                      : "text-slate-400 hover:text-white hover:bg-slate-900"
+                  }`}
+                >
+                  Categories SQL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSupabaseRlsErrorTable("all")}
+                  className={`flex-1 py-1.5 text-center text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                    supabaseRlsErrorTable === "all" 
+                      ? "bg-[#0066FF] text-white shadow-sm" 
+                      : "text-slate-400 hover:text-white hover:bg-slate-900"
+                  }`}
+                >
+                  Fix Both Tables
+                </button>
               </div>
 
               <div className="space-y-1.5">
@@ -2268,10 +2350,19 @@ export default function App() {
               {/* SQL box with Copy button */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center bg-slate-950 px-3.5 py-1.5 border-t border-r border-l border-slate-800 rounded-t-lg">
-                  <span className="font-mono text-[9px] text-[#0066FF] font-bold tracking-widest uppercase">Database SQL Query</span>
+                  <span className="font-mono text-[9px] text-[#0066FF] font-bold tracking-widest uppercase">
+                    {supabaseRlsErrorTable === "all" ? "Complete SQL Fix" : `${supabaseRlsErrorTable} SQL Query`}
+                  </span>
                   <button
                     onClick={() => {
-                      const sql = `-- Fix Row Level Security policies for products table\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;\n\nCREATE POLICY "Allow public read access on products" ON public.products \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert products" ON public.products \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update products" ON public.products \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete products" ON public.products \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.products TO anon, authenticated, service_role;`;
+                      let sql = "";
+                      if (supabaseRlsErrorTable === "products") {
+                        sql = `-- Fix Row Level Security policies for products table\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;\n\nCREATE POLICY "Allow public read access on products" ON public.products \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert products" ON public.products \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update products" ON public.products \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete products" ON public.products \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.products TO anon, authenticated, service_role;`;
+                      } else if (supabaseRlsErrorTable === "categories") {
+                        sql = `-- Fix Row Level Security policies for categories table\nALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;\n\nCREATE POLICY "Allow public read access on categories" ON public.categories \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert categories" ON public.categories \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update categories" ON public.categories \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete categories" ON public.categories \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.categories TO anon, authenticated, service_role;`;
+                      } else {
+                        sql = `-- 1. Enable RLS and permissions on products table\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;\nCREATE POLICY "Allow public read access on products" ON public.products FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert products" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete products" ON public.products FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.products TO anon, authenticated, service_role;\n\n-- 2. Enable RLS and permissions on categories table\nALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;\nCREATE POLICY "Allow public read access on categories" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update categories" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.categories TO anon, authenticated, service_role;`;
+                      }
                       navigator.clipboard.writeText(sql);
                       safeAlert("SQL Script Copied! Paste this in your Supabase SQL Editor and click Run.", "success");
                     }}
@@ -2282,31 +2373,73 @@ export default function App() {
                   </button>
                 </div>
                 <pre className="p-3 bg-slate-950 border border-slate-850 rounded-b-lg text-[10px] font-mono text-emerald-400 overflow-x-auto leading-relaxed max-h-[140px]">
-{`-- 1. Enable RLS on products table
+                  {supabaseRlsErrorTable === "products" && (
+`-- Enable RLS on products table
 ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
--- 2. Drop any previous broken policies
+-- Drop previous policies
 DROP POLICY IF EXISTS "Allow public read access on products" ON public.products;
 DROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;
 DROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;
 DROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;
 
--- 3. Create full public access policies for anon & authenticated roles
-CREATE POLICY "Allow public read access on products" ON public.products 
-FOR SELECT TO public, anon, authenticated USING (true);
+-- Create full select, insert, update and delete policies
+CREATE POLICY "Allow public read access on products" ON public.products FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert products" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to delete products" ON public.products FOR DELETE TO public, anon, authenticated USING (true);
 
-CREATE POLICY "Allow anyone to insert products" ON public.products 
-FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+-- Grant privileges
+GRANT ALL ON public.products TO anon, authenticated, service_role;`
+                  )}
+                  {supabaseRlsErrorTable === "categories" && (
+`-- Enable RLS on categories table
+ALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow anyone to update products" ON public.products 
-FOR UPDATE TO public, anon, authenticated USING (true);
+-- Drop previous policies
+DROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;
 
-CREATE POLICY "Allow anyone to delete products" ON public.products 
-FOR DELETE TO public, anon, authenticated USING (true);
+-- Create full select, insert, update and delete policies
+CREATE POLICY "Allow public read access on categories" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update categories" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);
 
--- 4. Grant roles full access
-GRANT ALL ON public.products TO anon, authenticated, service_role;`}
+-- Grant privileges
+GRANT ALL ON public.categories TO anon, authenticated, service_role;`
+                  )}
+                  {supabaseRlsErrorTable !== "products" && supabaseRlsErrorTable !== "categories" && (
+`-- 1. Fix products table RLS and policies
+ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on products" ON public.products;
+DROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;
+DROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;
+DROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;
+CREATE POLICY "Allow public read access on products" ON public.products FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert products" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to delete products" ON public.products FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.products TO anon, authenticated, service_role;
+
+-- 2. Fix categories table RLS and policies
+ALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;
+CREATE POLICY "Allow public read access on categories" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update categories" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.categories TO anon, authenticated, service_role;`
+                  )}
                 </pre>
               </div>
             </div>
