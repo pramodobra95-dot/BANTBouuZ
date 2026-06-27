@@ -1970,7 +1970,7 @@ app.get("/api/leads", (req, res) => {
 app.post("/api/leads", (req, res) => {
   const l = req.body;
   const newLead = {
-    id: `lead-${Date.now()}`,
+    id: l.id || `lead-${Date.now()}`,
     title: l.title,
     category: l.category,
     description: l.description,

@@ -79,6 +79,14 @@ export default function UserPanel({
         businessType: currentUser.businessType || "SME Services",
         emailNotifications: currentUser.emailNotifications !== false
       }));
+      setForm(prev => ({
+        ...prev,
+        companyName: currentUser.companyName || prev.companyName,
+        contactName: currentUser.name || prev.contactName,
+        mobile: currentUser.mobile || prev.mobile,
+        email: currentUser.email || prev.email,
+        city: currentUser.city || prev.city
+      }));
     }
   }, [currentUser]);
 

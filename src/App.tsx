@@ -172,12 +172,68 @@ export default function App() {
         resCats = catsRes.data || [];
         resProds = prodsRes.data || [];
         resVendors = vendorsRes.data || [];
-        resLeads = leadsRes.data || [];
+        
+        // 2. Resilient dual-source fetching for leads (enquiries)
+        let localLeads: any[] = [];
+        try {
+          const localLeadsRes = await fetch("/api/leads");
+          if (localLeadsRes.ok) {
+            localLeads = await localLeadsRes.json();
+          }
+        } catch (err) {
+          console.warn("Could not query leads from local server:", err);
+        }
+
+        const supabaseLeads = leadsRes.data || [];
+        const seenLeads = new Set();
+        resLeads = [];
+        [...supabaseLeads, ...localLeads].forEach((l: any) => {
+          const key = l.id || `${l.title}-${l.email}-${l.budget}`;
+          if (key && !seenLeads.has(key)) {
+            seenLeads.add(key);
+            resLeads.push(l);
+          }
+        });
+
         resBlogs = blogsRes.data || [];
         resBanners = bannersRes.data || [];
         resTestimonials = testimonialsRes.data || [];
         resNotifications = notificationsRes.data || [];
-        resUsers = [];
+        
+        // 1. Resilient dual-source fetching for registered users list
+        let profilesData: any[] = [];
+        try {
+          const profilesRes = await supabase.from("profiles").select("*");
+          if (profilesRes.data && profilesRes.data.length > 0) {
+            profilesData = profilesRes.data;
+          }
+        } catch (err) {
+          console.warn("Could not query profiles from Supabase:", err);
+        }
+
+        let localUsers: any[] = [];
+        try {
+          const localRes = await fetch("/api/users");
+          if (localRes.ok) {
+            localUsers = await localRes.json();
+          }
+        } catch (err) {
+          console.warn("Could not query users from local server:", err);
+        }
+
+        if (profilesData.length > 0) {
+          const seen = new Set();
+          resUsers = [];
+          [...profilesData, ...localUsers].forEach(u => {
+            const key = u.id || u.email;
+            if (key && !seen.has(key)) {
+              seen.add(key);
+              resUsers.push(u);
+            }
+          });
+        } else {
+          resUsers = localUsers;
+        }
 
         const settingsMap: Record<string, string> = {};
         if (settingsRes.data) {
@@ -529,6 +585,33 @@ export default function App() {
             });
           }
 
+          // 1. Save profile to Supabase 'profiles' table
+          try {
+            await supabase.from("profiles").insert([{
+              id: userObj.id,
+              name: userObj.name,
+              email: userObj.email,
+              companyName: userObj.companyName,
+              mobile: userObj.mobile,
+              city: userObj.city,
+              role: userObj.role,
+              createdAt: new Date().toISOString()
+            }]);
+          } catch (e) {
+            console.warn("Supabase profiles table insert skipped or failed:", e);
+          }
+
+          // 2. Duplicate sync to local Express backend /api/users to ensure fallback reliability!
+          try {
+            await fetch("/api/users", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(userObj)
+            });
+          } catch (e) {
+            console.warn("Local server fallback sync skipped or failed:", e);
+          }
+
           // Trigger Resend onboarding welcome email & admin registration alerts
           fetch("/api/resend/trigger-event", {
             method: "POST",
@@ -660,14 +743,16 @@ export default function App() {
   // 1. Post Lead (BANT)
   const handlePostLead = async (leadData: any) => {
     try {
+      const leadId = `lead-${Date.now()}`;
+      const payload = { ...leadData, id: leadId };
+
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(leadData)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         if (isSupabaseConfigured) {
-          const leadId = `lead-${Date.now()}`;
           const supabaseLead = {
             id: leadId,
             title: leadData.title,
@@ -2301,40 +2386,21 @@ export default function App() {
               </div>
 
               {/* Table Switcher Tabs */}
-              <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1">
-                <button
-                  type="button"
-                  onClick={() => setSupabaseRlsErrorTable("products")}
-                  className={`flex-1 py-1.5 text-center text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                    supabaseRlsErrorTable === "products" 
-                      ? "bg-[#0066FF] text-white shadow-sm" 
-                      : "text-slate-400 hover:text-white hover:bg-slate-900"
-                  }`}
-                >
-                  Products SQL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSupabaseRlsErrorTable("categories")}
-                  className={`flex-1 py-1.5 text-center text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                    supabaseRlsErrorTable === "categories" 
-                      ? "bg-[#0066FF] text-white shadow-sm" 
-                      : "text-slate-400 hover:text-white hover:bg-slate-900"
-                  }`}
-                >
-                  Categories SQL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSupabaseRlsErrorTable("all")}
-                  className={`flex-1 py-1.5 text-center text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                    supabaseRlsErrorTable === "all" 
-                      ? "bg-[#0066FF] text-white shadow-sm" 
-                      : "text-slate-400 hover:text-white hover:bg-slate-900"
-                  }`}
-                >
-                  Fix Both Tables
-                </button>
+              <div className="flex flex-wrap bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1">
+                {["products", "categories", "leads", "profiles", "all"].map((tabName) => (
+                  <button
+                    key={tabName}
+                    type="button"
+                    onClick={() => setSupabaseRlsErrorTable(tabName)}
+                    className={`flex-1 min-w-[70px] py-1.5 text-center text-[10px] font-bold rounded-md transition-all cursor-pointer capitalize ${
+                      supabaseRlsErrorTable === tabName 
+                        ? "bg-[#0066FF] text-white shadow-sm" 
+                        : "text-slate-400 hover:text-white hover:bg-slate-900"
+                    }`}
+                  >
+                    {tabName === "all" ? "Fix All" : `${tabName}`}
+                  </button>
+                ))}
               </div>
 
               <div className="space-y-1.5">
@@ -2360,8 +2426,12 @@ export default function App() {
                         sql = `-- Fix Row Level Security policies for products table\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;\n\nCREATE POLICY "Allow public read access on products" ON public.products \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert products" ON public.products \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update products" ON public.products \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete products" ON public.products \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.products TO anon, authenticated, service_role;`;
                       } else if (supabaseRlsErrorTable === "categories") {
                         sql = `-- Fix Row Level Security policies for categories table\nALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;\n\nCREATE POLICY "Allow public read access on categories" ON public.categories \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert categories" ON public.categories \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update categories" ON public.categories \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete categories" ON public.categories \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.categories TO anon, authenticated, service_role;`;
+                      } else if (supabaseRlsErrorTable === "leads") {
+                        sql = `-- Fix Row Level Security policies for leads table\nALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to insert leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to update leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to delete leads" ON public.leads;\n\nCREATE POLICY "Allow public read access on leads" ON public.leads \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert leads" ON public.leads \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update leads" ON public.leads \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete leads" ON public.leads \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.leads TO anon, authenticated, service_role;`;
+                      } else if (supabaseRlsErrorTable === "profiles") {
+                        sql = `-- Fix Row Level Security policies for profiles table\nALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to insert profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to update profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to delete profiles" ON public.profiles;\n\nCREATE POLICY "Allow public read access on profiles" ON public.profiles \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert profiles" ON public.profiles \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update profiles" ON public.profiles \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete profiles" ON public.profiles \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.profiles TO anon, authenticated, service_role;`;
                       } else {
-                        sql = `-- 1. Enable RLS and permissions on products table\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;\nCREATE POLICY "Allow public read access on products" ON public.products FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert products" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete products" ON public.products FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.products TO anon, authenticated, service_role;\n\n-- 2. Enable RLS and permissions on categories table\nALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;\nCREATE POLICY "Allow public read access on categories" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update categories" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.categories TO anon, authenticated, service_role;`;
+                        sql = `-- 1. Fix products table RLS and policies\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;\nDROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;\nCREATE POLICY "Allow public read access on products" ON public.products FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert products" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete products" ON public.products FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.products TO anon, authenticated, service_role;\n\n-- 2. Fix categories table RLS and policies\nALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;\nDROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;\nCREATE POLICY "Allow public read access on categories" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update categories" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.categories TO anon, authenticated, service_role;\n\n-- 3. Fix leads table RLS and policies\nALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to insert leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to update leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to delete leads" ON public.leads;\nCREATE POLICY "Allow public read access on leads" ON public.leads FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert leads" ON public.leads FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update leads" ON public.leads FOR UPDATE USING (true);\nCREATE POLICY "Allow anyone to delete leads" ON public.leads FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.leads TO anon, authenticated, service_role;\n\n-- 4. Fix profiles table RLS and policies\nCREATE TABLE IF NOT EXISTS public.profiles (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, "companyName" TEXT, mobile TEXT, city TEXT, role TEXT DEFAULT 'buyer', "createdAt" TIMESTAMPTZ DEFAULT NOW());\nALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS "Allow public read access on profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to insert profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to update profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to delete profiles" ON public.profiles;\nCREATE POLICY "Allow public read access on profiles" ON public.profiles FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert profiles" ON public.profiles FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update profiles" ON public.profiles FOR UPDATE USING (true);\nCREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.profiles TO anon, authenticated, service_role;`;
                       }
                       navigator.clipboard.writeText(sql);
                       safeAlert("SQL Script Copied! Paste this in your Supabase SQL Editor and click Run.", "success");
@@ -2387,7 +2457,7 @@ DROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;
 -- Create full select, insert, update and delete policies
 CREATE POLICY "Allow public read access on products" ON public.products FOR SELECT TO public, anon, authenticated USING (true);
 CREATE POLICY "Allow anyone to insert products" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);
-CREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE USING (true);
 CREATE POLICY "Allow anyone to delete products" ON public.products FOR DELETE TO public, anon, authenticated USING (true);
 
 -- Grant privileges
@@ -2413,7 +2483,57 @@ CREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELET
 -- Grant privileges
 GRANT ALL ON public.categories TO anon, authenticated, service_role;`
                   )}
-                  {supabaseRlsErrorTable !== "products" && supabaseRlsErrorTable !== "categories" && (
+                  {supabaseRlsErrorTable === "leads" && (
+`-- Enable RLS on leads table
+ALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+
+-- Drop previous policies
+DROP POLICY IF EXISTS "Allow public read access on leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to insert leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to update leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to delete leads" ON public.leads;
+
+-- Create full select, insert, update and delete policies
+CREATE POLICY "Allow public read access on leads" ON public.leads FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert leads" ON public.leads FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update leads" ON public.leads FOR UPDATE USING (true);
+CREATE POLICY "Allow anyone to delete leads" ON public.leads FOR DELETE USING (true);
+
+-- Grant privileges
+GRANT ALL ON public.leads TO anon, authenticated, service_role;`
+                  )}
+                  {supabaseRlsErrorTable === "profiles" && (
+`-- Enable RLS on profiles table
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  "companyName" TEXT,
+  mobile TEXT,
+  city TEXT,
+  role TEXT DEFAULT 'buyer',
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+-- Drop previous policies
+DROP POLICY IF EXISTS "Allow public read access on profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to insert profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to update profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to delete profiles" ON public.profiles;
+
+-- Create full select, insert, update and delete policies
+CREATE POLICY "Allow public read access on profiles" ON public.profiles FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert profiles" ON public.profiles FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update profiles" ON public.profiles FOR UPDATE USING (true);
+CREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);
+
+-- Grant privileges
+GRANT ALL ON public.profiles TO anon, authenticated, service_role;`
+                  )}
+                  {supabaseRlsErrorTable === "all" && (
 `-- 1. Fix products table RLS and policies
 ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
@@ -2438,7 +2558,43 @@ CREATE POLICY "Allow public read access on categories" ON public.categories FOR 
 CREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);
 CREATE POLICY "Allow anyone to update categories" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);
 CREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);
-GRANT ALL ON public.categories TO anon, authenticated, service_role;`
+GRANT ALL ON public.categories TO anon, authenticated, service_role;
+
+-- 3. Fix leads table RLS and policies
+ALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to insert leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to update leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to delete leads" ON public.leads;
+CREATE POLICY "Allow public read access on leads" ON public.leads FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert leads" ON public.leads FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update leads" ON public.leads FOR UPDATE USING (true);
+CREATE POLICY "Allow anyone to delete leads" ON public.leads FOR DELETE USING (true);
+GRANT ALL ON public.leads TO anon, authenticated, service_role;
+
+-- 4. Fix profiles table RLS and policies
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  "companyName" TEXT,
+  mobile TEXT,
+  city TEXT,
+  role TEXT DEFAULT 'buyer',
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to insert profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to update profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to delete profiles" ON public.profiles;
+CREATE POLICY "Allow public read access on profiles" ON public.profiles FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert profiles" ON public.profiles FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update profiles" ON public.profiles FOR UPDATE USING (true);
+CREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.profiles TO anon, authenticated, service_role;`
                   )}
                 </pre>
               </div>

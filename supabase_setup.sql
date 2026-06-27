@@ -7,6 +7,7 @@
 -- Run this script inside the Supabase SQL Editor.
 
 -- DROP TABLES IF THEY ALREADY EXIST (SAFE FOR RESET)
+DROP TABLE IF EXISTS public.profiles CASCADE;
 DROP TABLE IF EXISTS public.notifications CASCADE;
 DROP TABLE IF EXISTS public.settings CASCADE;
 DROP TABLE IF EXISTS public.testimonials CASCADE;
@@ -164,6 +165,21 @@ CREATE TABLE public.notifications (
 );
 
 
+-- ==========================================
+-- 10. TABLE: profiles
+-- ==========================================
+CREATE TABLE public.profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  "companyName" TEXT,
+  mobile TEXT,
+  city TEXT,
+  role TEXT DEFAULT 'buyer',
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+
 -- ====================================================================
 -- ROW LEVEL SECURITY (RLS) & ACCESS CONTROL
 -- ====================================================================
@@ -177,6 +193,7 @@ ALTER TABLE public.banners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.testimonials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- 1. Create Public Read Policies for all tables
 CREATE POLICY "Allow public read access on categories" ON public.categories FOR SELECT USING (true);
@@ -188,6 +205,7 @@ CREATE POLICY "Allow public read access on banners" ON public.banners FOR SELECT
 CREATE POLICY "Allow public read access on testimonials" ON public.testimonials FOR SELECT USING (true);
 CREATE POLICY "Allow public read access on settings" ON public.settings FOR SELECT USING (true);
 CREATE POLICY "Allow public read access on notifications" ON public.notifications FOR SELECT USING (true);
+CREATE POLICY "Allow public read access on profiles" ON public.profiles FOR SELECT USING (true);
 
 -- 2. Create Write Policies for public insertions and edits (Client-Side actions)
 CREATE POLICY "Allow anyone to insert leads" ON public.leads FOR INSERT WITH CHECK (true);
@@ -202,6 +220,9 @@ CREATE POLICY "Allow anyone to insert notifications" ON public.notifications FOR
 CREATE POLICY "Allow anyone to update notifications" ON public.notifications FOR UPDATE USING (true);
 CREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE USING (true);
+CREATE POLICY "Allow anyone to insert profiles" ON public.profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anyone to update profiles" ON public.profiles FOR UPDATE USING (true);
+CREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE USING (true);
 
 
 -- ====================================================================
