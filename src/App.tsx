@@ -184,10 +184,55 @@ export default function App() {
           console.warn("Could not query leads from local server:", err);
         }
 
-        const supabaseLeads = leadsRes.data || [];
+        const supabaseLeads = (leadsRes.data || []).map((l: any) => ({
+          id: l.id,
+          title: l.title || l.description?.split('\n')[0] || "Software Sourcing Requirement",
+          category: l.category,
+          description: l.description,
+          budget: l.budget,
+          companyName: l.buyercompany || l.buyerCompany || l.companyName || "",
+          contactName: l.buyername || l.buyerName || l.contactName || "",
+          mobile: l.buyerphone || l.buyerPhone || l.mobile || "",
+          email: l.buyeremail || l.buyerEmail || l.email || "",
+          city: l.city || "Delhi",
+          timeline: l.timeline,
+          status: l.status || 'Submitted',
+          bant: l.bant || {
+            budget: l.budget || "",
+            authority: l.authority || "Yes",
+            need: l.need || l.description || "",
+            timeline: l.timeline || ""
+          },
+          assignedVendors: l.assignedVendors || [],
+          createdAt: l.createdat || l.createdAt
+        }));
+
+        const mappedLocalLeads = (localLeads || []).map((l: any) => ({
+          id: l.id,
+          title: l.title || l.description?.split('\n')[0] || "Software Sourcing Requirement",
+          category: l.category,
+          description: l.description,
+          budget: l.budget,
+          companyName: l.companyName || l.buyercompany || l.buyerCompany || "",
+          contactName: l.contactName || l.buyername || l.buyerName || "",
+          mobile: l.mobile || l.buyerphone || l.buyerPhone || "",
+          email: l.email || l.buyeremail || l.buyerEmail || "",
+          city: l.city || "Delhi",
+          timeline: l.timeline,
+          status: l.status || 'Submitted',
+          bant: l.bant || {
+            budget: l.budget || "",
+            authority: l.authority || "Yes",
+            need: l.need || l.description || "",
+            timeline: l.timeline || ""
+          },
+          assignedVendors: l.assignedVendors || [],
+          createdAt: l.createdAt || l.createdat
+        }));
+
         const seenLeads = new Set();
         resLeads = [];
-        [...supabaseLeads, ...localLeads].forEach((l: any) => {
+        [...supabaseLeads, ...mappedLocalLeads].forEach((l: any) => {
           const key = l.id || `${l.title}-${l.email}-${l.budget}`;
           if (key && !seenLeads.has(key)) {
             seenLeads.add(key);
@@ -221,19 +266,37 @@ export default function App() {
           console.warn("Could not query users from local server:", err);
         }
 
-        if (profilesData.length > 0) {
-          const seen = new Set();
-          resUsers = [];
-          [...profilesData, ...localUsers].forEach(u => {
-            const key = u.id || u.email;
-            if (key && !seen.has(key)) {
-              seen.add(key);
-              resUsers.push(u);
-            }
-          });
-        } else {
-          resUsers = localUsers;
-        }
+        const normalizedProfiles = (profilesData || []).map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          companyName: u.companyname || u.companyName || "",
+          mobile: u.mobile,
+          city: u.city,
+          role: u.role || "buyer",
+          createdAt: u.createdat || u.createdAt
+        }));
+
+        const normalizedLocalUsers = (localUsers || []).map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          companyName: u.companyName || u.companyname || "",
+          mobile: u.mobile,
+          city: u.city,
+          role: u.role || "buyer",
+          createdAt: u.createdAt || u.createdat
+        }));
+
+        const seenUsers = new Set();
+        resUsers = [];
+        [...normalizedProfiles, ...normalizedLocalUsers].forEach(u => {
+          const key = u.id || u.email;
+          if (key && !seenUsers.has(key)) {
+            seenUsers.add(key);
+            resUsers.push(u);
+          }
+        });
 
         const settingsMap: Record<string, string> = {};
         if (settingsRes.data) {
@@ -818,41 +881,45 @@ export default function App() {
       const leadId = `lead-${Date.now()}`;
       const payload = { ...leadData, id: leadId };
 
-      const res = await fetch("/api/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        if (isSupabaseConfigured) {
-          const supabaseLead = {
-            id: leadId,
-            title: leadData.title,
-            category: leadData.category,
-            description: leadData.description,
-            budget: leadData.budget,
-            companyName: leadData.companyName,
-            contactName: leadData.contactName,
-            mobile: leadData.mobile,
-            email: leadData.email,
-            city: leadData.city,
-            timeline: leadData.timeline,
-            status: "Submitted",
-            bant: {
-              budget: leadData.bantBudget || "Stated Budget matches expected pricing",
-              authority: leadData.bantAuthority || "Evaluating IT Decision Maker",
-              need: leadData.bantNeed || "Confirmed requirement for software suite",
-              timeline: leadData.bantTimeline || "Planned implementation within timeline"
-            },
-            assignedVendors: []
-          };
-          const { error } = await supabase.from("leads").insert([supabaseLead]);
-          if (error) {
-            console.error("Supabase lead insertion error:", error);
-          }
+      let localSuccess = false;
+      try {
+        const res = await fetch("/api/leads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          localSuccess = true;
         }
-        fetchAllData();
+      } catch (err) {
+        console.warn("Could not save lead to local backend:", err);
       }
+
+      if (isSupabaseConfigured) {
+        const supabaseLead = {
+          id: leadId,
+          title: leadData.title || "Software Sourcing Requirement",
+          category: leadData.category,
+          description: leadData.description,
+          budget: leadData.budget,
+          buyerCompany: leadData.companyName || "",
+          buyerName: leadData.contactName || "",
+          buyerPhone: leadData.mobile || "",
+          buyerEmail: leadData.email || "",
+          city: leadData.city || "Delhi",
+          timeline: leadData.timeline,
+          status: "Submitted",
+          authority: leadData.bantAuthority || "Yes",
+          need: leadData.bantNeed || leadData.description || "",
+          score: 80,
+          createdAt: new Date().toISOString()
+        };
+        const { error } = await supabase.from("leads").insert([supabaseLead]);
+        if (error) {
+          console.error("Supabase lead insertion error:", error);
+        }
+      }
+      fetchAllData();
     } catch (err) {
       console.error(err);
     }
