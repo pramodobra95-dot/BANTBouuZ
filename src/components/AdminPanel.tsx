@@ -218,7 +218,7 @@ export default function AdminPanel({
     setShowVendorForm(true);
   };
 
-  const handleProductSubmit = (e: React.FormEvent) => {
+  const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const features = productForm.featuresText.split(",").map(f => f.trim()).filter(Boolean);
     const faqs = [];
@@ -250,13 +250,11 @@ export default function AdminPanel({
 
     if (editingProduct) {
       if (onUpdateProduct) {
-        onUpdateProduct(editingProduct.id, payload);
-        safeAlert("Product updated successfully in live catalog!");
+        await onUpdateProduct(editingProduct.id, payload);
       }
     } else {
       if (onAddProduct) {
-        onAddProduct(payload);
-        safeAlert("Product created successfully and approved!");
+        await onAddProduct(payload);
       }
     }
 
