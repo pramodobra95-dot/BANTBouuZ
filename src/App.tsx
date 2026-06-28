@@ -169,6 +169,16 @@ export default function App() {
           supabase.auth.getUser()
         ]);
 
+        if (catsRes.error) console.error("[Supabase Error] categories:", catsRes.error);
+        if (prodsRes.error) console.error("[Supabase Error] products:", prodsRes.error);
+        if (vendorsRes.error) console.error("[Supabase Error] vendors:", vendorsRes.error);
+        if (leadsRes.error) console.error("[Supabase Error] leads:", leadsRes.error);
+        if (blogsRes.error) console.warn("[Supabase Notice] blogs table query notice (will fall back to local DB):", blogsRes.error);
+        if (bannersRes.error) console.warn("[Supabase Notice] banners table query notice (will fall back to local DB):", bannersRes.error);
+        if (testimonialsRes.error) console.warn("[Supabase Notice] testimonials table query notice (will fall back to local DB):", testimonialsRes.error);
+        if (notificationsRes.error) console.warn("[Supabase Notice] notifications table query notice (will fall back to local DB):", notificationsRes.error);
+        if (settingsRes.error) console.error("[Supabase Error] settings:", settingsRes.error);
+
         resCats = catsRes.data || [];
         resProds = prodsRes.data || [];
         resVendors = vendorsRes.data || [];
@@ -240,15 +250,93 @@ export default function App() {
           }
         });
 
-        resBlogs = blogsRes.data || [];
-        resBanners = bannersRes.data || [];
-        resTestimonials = testimonialsRes.data || [];
-        resNotifications = notificationsRes.data || [];
+        // Resilient dual-source fetching for blogs
+        let localBlogs: any[] = [];
+        try {
+          const localBlogsRes = await fetch("/api/blogs");
+          if (localBlogsRes.ok) {
+            localBlogs = await localBlogsRes.json();
+          }
+        } catch (err) {
+          console.warn("Could not query blogs from local server:", err);
+        }
+        const supabaseBlogs = blogsRes.data || [];
+        const seenBlogs = new Set();
+        resBlogs = [];
+        [...supabaseBlogs, ...localBlogs].forEach((b: any) => {
+          if (b && b.id && !seenBlogs.has(b.id)) {
+            seenBlogs.add(b.id);
+            resBlogs.push(b);
+          }
+        });
+
+        // Resilient dual-source fetching for banners
+        let localBanners: any[] = [];
+        try {
+          const localBannersRes = await fetch("/api/banners");
+          if (localBannersRes.ok) {
+            localBanners = await localBannersRes.json();
+          }
+        } catch (err) {
+          console.warn("Could not query banners from local server:", err);
+        }
+        const supabaseBanners = bannersRes.data || [];
+        const seenBanners = new Set();
+        resBanners = [];
+        [...supabaseBanners, ...localBanners].forEach((b: any) => {
+          if (b && b.id && !seenBanners.has(b.id)) {
+            seenBanners.add(b.id);
+            resBanners.push(b);
+          }
+        });
+
+        // Resilient dual-source fetching for testimonials
+        let localTestimonials: any[] = [];
+        try {
+          const localTestimonialsRes = await fetch("/api/testimonials");
+          if (localTestimonialsRes.ok) {
+            localTestimonials = await localTestimonialsRes.json();
+          }
+        } catch (err) {
+          console.warn("Could not query testimonials from local server:", err);
+        }
+        const supabaseTestimonials = testimonialsRes.data || [];
+        const seenTestimonials = new Set();
+        resTestimonials = [];
+        [...supabaseTestimonials, ...localTestimonials].forEach((t: any) => {
+          if (t && t.id && !seenTestimonials.has(t.id)) {
+            seenTestimonials.add(t.id);
+            resTestimonials.push(t);
+          }
+        });
+
+        // Resilient dual-source fetching for notifications
+        let localNotifications: any[] = [];
+        try {
+          const localNotificationsRes = await fetch("/api/notifications");
+          if (localNotificationsRes.ok) {
+            localNotifications = await localNotificationsRes.json();
+          }
+        } catch (err) {
+          console.warn("Could not query notifications from local server:", err);
+        }
+        const supabaseNotifications = notificationsRes.data || [];
+        const seenNotifications = new Set();
+        resNotifications = [];
+        [...supabaseNotifications, ...localNotifications].forEach((n: any) => {
+          if (n && n.id && !seenNotifications.has(n.id)) {
+            seenNotifications.add(n.id);
+            resNotifications.push(n);
+          }
+        });
         
         // 1. Resilient dual-source fetching for registered users list
         let profilesData: any[] = [];
         try {
           const profilesRes = await supabase.from("profiles").select("*");
+          if (profilesRes.error) {
+            console.error("[Supabase Error] profiles fetch:", profilesRes.error);
+          }
           if (profilesRes.data && profilesRes.data.length > 0) {
             profilesData = profilesRes.data;
           }
@@ -722,7 +810,7 @@ export default function App() {
 
           // 1. Save profile to Supabase 'profiles' table
           try {
-            await supabase.from("profiles").insert([{
+            const { error } = await supabase.from("profiles").insert([{
               id: userObj.id,
               name: userObj.name,
               email: userObj.email,
@@ -732,6 +820,10 @@ export default function App() {
               role: userObj.role,
               createdAt: new Date().toISOString()
             }]);
+            if (error) {
+              console.error("Supabase profiles insert failed with database error:", error);
+              safeAlert("Database notice: Profile synchronization delayed (" + (error.message || error) + ")", "warning");
+            }
           } catch (e) {
             console.warn("Supabase profiles table insert skipped or failed:", e);
           }
@@ -902,21 +994,27 @@ export default function App() {
           category: leadData.category,
           description: leadData.description,
           budget: leadData.budget,
-          buyerCompany: leadData.companyName || "",
-          buyerName: leadData.contactName || "",
-          buyerPhone: leadData.mobile || "",
-          buyerEmail: leadData.email || "",
+          companyName: leadData.companyName || "",
+          contactName: leadData.contactName || "",
+          mobile: leadData.mobile || "",
+          email: leadData.email || "",
           city: leadData.city || "Delhi",
           timeline: leadData.timeline,
           status: "Submitted",
-          authority: leadData.bantAuthority || "Yes",
-          need: leadData.bantNeed || leadData.description || "",
-          score: 80,
+          bant: {
+            budget: leadData.budget || "",
+            authority: leadData.bantAuthority || "Yes",
+            need: leadData.bantNeed || leadData.description || "",
+            timeline: leadData.timeline || ""
+          },
           createdAt: new Date().toISOString()
         };
         const { error } = await supabase.from("leads").insert([supabaseLead]);
         if (error) {
           console.error("Supabase lead insertion error:", error);
+          safeAlert("Error syncing requirement to permanent cloud storage: " + (error.message || error), "warning");
+        } else {
+          safeAlert("Sourcing requirement published successfully to Supabase!", "success");
         }
       }
       fetchAllData();
