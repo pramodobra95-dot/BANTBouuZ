@@ -1,5 +1,5 @@
 import React from "react";
-import { ShieldCheck, Phone, Mail, MapPin, ExternalLink } from "lucide-react";
+import { ShieldCheck, Phone, Mail, MapPin, ExternalLink, Facebook, Instagram, Linkedin } from "lucide-react";
 
 interface FooterProps {
   onNav: (tab: string) => void;
@@ -23,6 +23,38 @@ export default function Footer({ onNav, openSeoViewer }: FooterProps) {
           <p className="text-xs text-slate-400 leading-relaxed">
             India's premier B2B Enterprise IT & Software Solutions marketplace. We pre-qualify procurement requirements using strict Budget, Authority, Need, and Timeline (BANT) criteria, saving months of sourcing efforts.
           </p>
+          <div className="pt-2">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2.5">Connect with BANTConfirm</p>
+            <div className="flex items-center space-x-3.5">
+              <a 
+                href="https://www.facebook.com/share/1Gn5NuBmMJ/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                aria-label="Follow BANTConfirm on Facebook"
+                className="text-slate-400 hover:text-[#0066FF] hover:bg-slate-800 p-2.5 rounded-lg transition-all duration-300 transform hover:scale-110 flex items-center justify-center bg-slate-950/40 border border-slate-800"
+              >
+                <Facebook className="w-[26px] h-[26px]" />
+              </a>
+              <a 
+                href="https://www.instagram.com/bantconfirm?igsh=Z2FpYW9iYnk2c3Zr" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                aria-label="Follow BANTConfirm on Instagram"
+                className="text-slate-400 hover:text-[#FFC107] hover:bg-slate-800 p-2.5 rounded-lg transition-all duration-300 transform hover:scale-110 flex items-center justify-center bg-slate-950/40 border border-slate-800"
+              >
+                <Instagram className="w-[26px] h-[26px]" />
+              </a>
+              <a 
+                href="https://www.linkedin.com/company/bant-confirm/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                aria-label="Follow BANTConfirm on LinkedIn"
+                className="text-slate-400 hover:text-[#0066FF] hover:bg-slate-800 p-2.5 rounded-lg transition-all duration-300 transform hover:scale-110 flex items-center justify-center bg-slate-950/40 border border-slate-800"
+              >
+                <Linkedin className="w-[26px] h-[26px]" />
+              </a>
+            </div>
+          </div>
         </div>
 
         {/* Categories Column */}

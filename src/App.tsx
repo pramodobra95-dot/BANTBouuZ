@@ -4,7 +4,7 @@ import {
   ShieldAlert, Settings, Eye, HelpCircle, Phone, 
   MapPin, Globe, CheckCircle, List, ArrowRight, UserCheck, 
   Sparkles, Award, Shield, FileText, User, Lock, Mail, Building, LogOut,
-  Menu, X, AlertCircle, AlertTriangle, Info, Copy
+  Menu, X, AlertCircle, AlertTriangle, Info, Copy, Facebook, Instagram, Linkedin
 } from "lucide-react";
 import HomeView from "./components/HomeView";
 import UserPanel from "./components/UserPanel";
@@ -2004,6 +2004,17 @@ export default function App() {
     } catch (err) { console.error(err); }
   };
 
+  const handleUpdateBlog = async (blogId: string, blogData: any) => {
+    try {
+      const res = await fetch(`/api/blogs/${blogId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(blogData)
+      });
+      if (res.ok) fetchAllData();
+    } catch (err) { console.error(err); }
+  };
+
   const handleUpdateCMSPage = async (key: string, val: string) => {
     try {
       const res = await fetch("/api/settings", {
@@ -2535,6 +2546,7 @@ export default function App() {
                   onAddBanner={handleAddBanner}
                   onDeleteBanner={handleDeleteBanner}
                   onAddBlog={handleAddBlog}
+                  onUpdateBlog={handleUpdateBlog}
                   onDeleteBlog={handleDeleteBlog}
                   cmsPages={cmsPages}
                   onUpdateCMSPage={handleUpdateCMSPage}
@@ -2609,14 +2621,48 @@ export default function App() {
                   <p className="text-xs text-slate-500">Immediate telephone routing and corporate registry audits.</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-700">
-                  <div className="space-y-4">
-                    <div>
-                      <p className="font-bold text-slate-400 uppercase text-[10px]">Registered HQ Address</p>
-                      <p className="font-semibold text-slate-800 mt-1">BANTConfirm Corporate Hub, Sector 62, Noida, UP, 201301</p>
+                  <div className="space-y-4 flex flex-col justify-between">
+                    <div className="space-y-4">
+                      <div>
+                        <p className="font-bold text-slate-400 uppercase text-[10px]">Registered HQ Address</p>
+                        <p className="font-semibold text-slate-800 mt-1">BANTConfirm Corporate Hub, Sector 62, Noida, UP, 201301</p>
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-400 uppercase text-[10px]">Corporate Enquiries</p>
+                        <p className="font-semibold text-[#0066FF] mt-1">support@bantconfirm.com</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-slate-400 uppercase text-[10px]">Corporate Enquiries</p>
-                      <p className="font-semibold text-[#0066FF] mt-1">support@bantconfirm.com</p>
+                    <div className="pt-2 border-t border-slate-100 mt-auto">
+                      <p className="font-bold text-slate-400 uppercase text-[10px] mb-2.5">Official Social Channels</p>
+                      <div className="flex items-center gap-3">
+                        <a 
+                          href="https://www.facebook.com/share/1Gn5NuBmMJ/" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          aria-label="Visit BANTConfirm Facebook Profile"
+                          className="text-slate-500 hover:text-white hover:bg-[#0066FF] hover:border-[#0066FF] p-2 rounded-xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center border border-slate-200 bg-slate-50 shadow-2xs"
+                        >
+                          <Facebook className="w-[24px] h-[24px]" />
+                        </a>
+                        <a 
+                          href="https://www.instagram.com/bantconfirm?igsh=Z2FpYW9iYnk2c3Zr" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          aria-label="Visit BANTConfirm Instagram Profile"
+                          className="text-slate-500 hover:text-slate-900 hover:bg-[#FFC107] hover:border-[#FFC107] p-2 rounded-xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center border border-slate-200 bg-slate-50 shadow-2xs"
+                        >
+                          <Instagram className="w-[24px] h-[24px]" />
+                        </a>
+                        <a 
+                          href="https://www.linkedin.com/company/bant-confirm/" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          aria-label="Visit BANTConfirm LinkedIn Profile"
+                          className="text-slate-500 hover:text-white hover:bg-[#0066FF] hover:border-[#0066FF] p-2 rounded-xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center border border-slate-200 bg-slate-50 shadow-2xs"
+                        >
+                          <Linkedin className="w-[24px] h-[24px]" />
+                        </a>
+                      </div>
                     </div>
                   </div>
                   <form onSubmit={(e) => { e.preventDefault(); safeAlert("Enquiry dispatched safely! Sourcing desk callback queued."); }} className="space-y-3">

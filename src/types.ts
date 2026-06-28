@@ -117,6 +117,13 @@ export interface Blog {
   metaKeywords?: string;
   focusKeyword?: string;
   schemaMarkup?: string;
+  status?: 'Draft' | 'Published' | 'Scheduled';
+  views?: number;
+  isAiGenerated?: boolean;
+  excerpt?: string;
+  shortDescription?: string;
+  canonicalUrl?: string;
+  publishDate?: string;
 }
 
 export interface Banner {
