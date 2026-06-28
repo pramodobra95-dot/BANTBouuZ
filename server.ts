@@ -703,22 +703,60 @@ async function resilientInsertProfile(newUser: any, customClient?: any) {
   const runner = customClient || pgPool;
   if (!runner) return;
   try {
-    // Try case-sensitive/quoted schema
+    // Try case-sensitive/quoted schema with avatar and provider
     await runner.query(
-      `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, "companyName" = EXCLUDED."companyName", mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
-      [newUser.id, newUser.name, newUser.email, newUser.companyName || "", newUser.mobile || "", newUser.city || "", newUser.role || "buyer", newUser.createdAt || new Date().toISOString()]
+      `INSERT INTO profiles (id, name, email, "companyName", mobile, city, role, "createdAt", avatar, provider)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (id) DO UPDATE SET 
+         name = EXCLUDED.name, 
+         email = EXCLUDED.email, 
+         "companyName" = EXCLUDED."companyName", 
+         mobile = EXCLUDED.mobile, 
+         city = EXCLUDED.city, 
+         role = EXCLUDED.role,
+         avatar = EXCLUDED.avatar,
+         provider = EXCLUDED.provider`,
+      [
+        newUser.id, 
+        newUser.name, 
+        newUser.email, 
+        newUser.companyName || "", 
+        newUser.mobile || "", 
+        newUser.city || "", 
+        newUser.role || "buyer", 
+        newUser.createdAt || new Date().toISOString(),
+        newUser.avatar || "",
+        newUser.provider || ""
+      ]
     );
   } catch (err: any) {
     console.warn("[DB WARNING] Quoted profiles insert failed, trying folded lowercase fallback:", err.message || err);
     try {
       // Try folded/lowercase/unquoted schema
       await runner.query(
-        `INSERT INTO profiles (id, name, email, companyName, mobile, city, role, createdAt)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, companyName = EXCLUDED.companyName, mobile = EXCLUDED.mobile, city = EXCLUDED.city, role = EXCLUDED.role`,
-        [newUser.id, newUser.name, newUser.email, newUser.companyName || "", newUser.mobile || "", newUser.city || "", newUser.role || "buyer", newUser.createdAt || new Date().toISOString()]
+        `INSERT INTO profiles (id, name, email, companyName, mobile, city, role, createdAt, avatar, provider)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (id) DO UPDATE SET 
+           name = EXCLUDED.name, 
+           email = EXCLUDED.email, 
+           companyName = EXCLUDED.companyName, 
+           mobile = EXCLUDED.mobile, 
+           city = EXCLUDED.city, 
+           role = EXCLUDED.role,
+           avatar = EXCLUDED.avatar,
+           provider = EXCLUDED.provider`,
+        [
+          newUser.id, 
+          newUser.name, 
+          newUser.email, 
+          newUser.companyName || "", 
+          newUser.mobile || "", 
+          newUser.city || "", 
+          newUser.role || "buyer", 
+          newUser.createdAt || new Date().toISOString(),
+          newUser.avatar || "",
+          newUser.provider || ""
+        ]
       );
     } catch (err2: any) {
       console.error("[DB ERROR] Both profiles inserts failed:", err2.message || err2);
@@ -961,6 +999,14 @@ async function initPostgres() {
       await client.query("ALTER TABLE leads ADD COLUMN IF NOT EXISTS city VARCHAR(100)");
     } catch (err) {
       console.warn("Could not alter leads table to add title and city:", err);
+    }
+
+    // Ensure profiles table has avatar and provider columns
+    try {
+      await client.query("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar VARCHAR(500)");
+      await client.query("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS provider VARCHAR(100)");
+    } catch (err) {
+      console.warn("Could not alter profiles table to add avatar and provider:", err);
     }
 
     console.log("PostgreSQL tables checked/created.");
@@ -2243,7 +2289,9 @@ app.get("/api/users", async (req, res) => {
         mobile: u.mobile,
         city: u.city,
         role: u.role || "buyer",
-        createdAt: u.createdat || u.createdAt || ""
+        createdAt: u.createdat || u.createdAt || "",
+        avatar: u.avatar || "",
+        provider: u.provider || ""
       }));
       // Sort in Javascript to be 100% case-insensitive and case-agnostic
       rows.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -2265,7 +2313,9 @@ app.post("/api/users", async (req, res) => {
     mobile: u.mobile || "",
     city: u.city || "",
     role: u.role || "buyer",
-    createdAt: u.createdAt || new Date().toISOString()
+    createdAt: u.createdAt || new Date().toISOString(),
+    avatar: u.avatar || "",
+    provider: u.provider || ""
   };
   if (!db.users) db.users = [];
   db.users.push(newUser);

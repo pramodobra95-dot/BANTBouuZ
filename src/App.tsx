@@ -22,7 +22,138 @@ import {
   Category, Product, Vendor, Lead, Blog, Banner, Testimonial, Notification 
 } from "./types";
 
+function OAuthCallbackHandler() {
+  const [status, setStatus] = React.useState("Establishing secure authentication session...");
+  const [errorDetails, setErrorDetails] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const handleAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        if (session && session.user) {
+          setStatus("Authentication verified! Finalizing profile...");
+          if (window.opener) {
+            window.opener.postMessage({
+              type: "OAUTH_AUTH_SUCCESS",
+              user: session.user
+            }, window.location.origin);
+            setTimeout(() => {
+              window.close();
+            }, 800);
+          } else {
+            window.location.href = "/";
+          }
+        } else {
+          // If no session immediately, listen to onAuthStateChange
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+            if ((event === "SIGNED_IN" || event === "USER_UPDATED") && currentSession) {
+              subscription.unsubscribe();
+              setStatus("Authentication verified! Finalizing profile...");
+              if (window.opener) {
+                window.opener.postMessage({
+                  type: "OAUTH_AUTH_SUCCESS",
+                  user: currentSession.user
+                }, window.location.origin);
+                setTimeout(() => {
+                  window.close();
+                }, 800);
+              } else {
+                window.location.href = "/";
+              }
+            }
+          });
+
+          // Fallback check after 3 seconds
+          const checkTimer = setTimeout(async () => {
+            const { data: { session: secSession } } = await supabase.auth.getSession();
+            if (secSession && secSession.user) {
+              subscription.unsubscribe();
+              setStatus("Authentication verified! Finalizing profile...");
+              if (window.opener) {
+                window.opener.postMessage({
+                  type: "OAUTH_AUTH_SUCCESS",
+                  user: secSession.user
+                }, window.location.origin);
+                setTimeout(() => {
+                  window.close();
+                }, 800);
+              } else {
+                window.location.href = "/";
+              }
+            }
+          }, 3000);
+
+          // Error timeout
+          const timeout = setTimeout(() => {
+            subscription.unsubscribe();
+            clearTimeout(checkTimer);
+            setStatus("Authentication failed or timed out.");
+            setErrorDetails("Could not retrieve a valid session from Supabase. Please close this window and try again.");
+            if (window.opener) {
+              window.opener.postMessage({
+                type: "OAUTH_AUTH_ERROR",
+                error: "Session timeout"
+              }, window.location.origin);
+              setTimeout(() => {
+                window.close();
+              }, 2500);
+            }
+          }, 12000);
+
+          return () => {
+            subscription.unsubscribe();
+            clearTimeout(checkTimer);
+            clearTimeout(timeout);
+          };
+        }
+      } catch (err: any) {
+        console.error("OAuth Callback Exchange Error:", err);
+        setStatus("Authentication Error");
+        setErrorDetails(err.message || "Unknown error occurred.");
+        if (window.opener) {
+          window.opener.postMessage({
+            type: "OAUTH_AUTH_ERROR",
+            error: err.message || "Unknown error"
+          }, window.location.origin);
+          setTimeout(() => {
+            window.close();
+          }, 3000);
+        }
+      }
+    };
+
+    handleAuth();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+      <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 max-w-sm w-full space-y-4 animate-in fade-in duration-200">
+        <div className="relative flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-4 h-4 bg-blue-600 rounded-full"></div>
+          </div>
+        </div>
+        <h3 className="text-lg font-black text-slate-800">Secure Authentication</h3>
+        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">{status}</p>
+        {errorDetails && (
+          <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg p-2.5 leading-relaxed font-semibold">
+            {errorDetails}
+          </p>
+        )}
+        <p className="text-[10px] text-slate-400 font-medium">This secure window will close automatically.</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  // Redirect callback if path matches /auth/callback
+  if (window.location.pathname === "/auth/callback" || window.location.pathname === "/auth/callback/") {
+    return <OAuthCallbackHandler />;
+  }
   // Current simulating role & navigation tabs
   const [currentRole, setCurrentRole] = useState<'buyer' | 'vendor' | 'admin'>('buyer');
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -88,6 +219,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
+  const [authLoading, setAuthLoading] = useState(false);
   
   // Login fields state
   const [authEmail, setAuthEmail] = useState("");
@@ -102,6 +234,275 @@ export default function App() {
   const [signUpMobile, setSignUpMobile] = useState("");
   const [signUpCity, setSignUpCity] = useState("");
   const [signUpRole, setSignUpRole] = useState<'buyer' | 'vendor' | 'admin'>('buyer');
+
+  // Listen for Google OAuth callback success/error messages from the authentication popup window
+  useEffect(() => {
+    const handleOAuthMessage = async (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+      
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        const supabaseUser = event.data.user;
+        if (supabaseUser) {
+          await handleGoogleSessionSuccess(supabaseUser);
+        }
+      } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+        setAuthLoading(false);
+        safeAlert("Google Authentication failed: " + (event.data.error || "Unknown Error"), "error");
+      }
+    };
+    
+    window.addEventListener('message', handleOAuthMessage);
+    return () => window.removeEventListener('message', handleOAuthMessage);
+  }, [signUpRole, authRole]);
+
+  // Initiate Google Sign-In or Sign-Up popup authentication
+  const handleGoogleAuth = async (flow: 'login' | 'signup') => {
+    if (!isSupabaseConfigured) {
+      safeAlert("Supabase connection is not fully configured yet. Google Auth requires a valid setup.", "warning");
+      return;
+    }
+    
+    setAuthLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent'
+          }
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.url) {
+        const width = 580;
+        const height = 680;
+        const left = window.screen.width / 2 - width / 2;
+        const top = window.screen.height / 2 - height / 2;
+        
+        const popup = window.open(
+          data.url,
+          "google_oauth_popup",
+          `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+        );
+        
+        if (!popup) {
+          setAuthLoading(false);
+          safeAlert("Popup blocker detected! Please allow popups for this site to complete secure Google login.", "warning");
+          return;
+        }
+        
+        // Save targeted signup or login role dynamically on global scope so we know how to configure the profile upon success
+        const targetRole = flow === 'signup' ? signUpRole : authRole;
+        (window as any).__oauthTargetRole = targetRole;
+      } else {
+        throw new Error("No authorization URL returned from Supabase.");
+      }
+    } catch (err: any) {
+      console.error("Google Authentication error:", err);
+      setAuthLoading(false);
+      safeAlert("Google Auth initialization error: " + (err.message || err), "error");
+    }
+  };
+
+  // Process user object, upsert profile and redirect to correct panel
+  const handleGoogleSessionSuccess = async (supabaseUser: any) => {
+    try {
+      const emailLower = (supabaseUser.email || "").trim().toLowerCase();
+      let userRole: 'buyer' | 'vendor' | 'admin' = (window as any).__oauthTargetRole || 'buyer';
+      
+      // Auto upgrade admin emails
+      if (
+        emailLower === "admin@bantconfirm.com" || 
+        emailLower === "info.bouuz@gmail.com" || 
+        emailLower === "info.bouuz@gmail.co" || 
+        emailLower === "pramodobra95@gmail.com"
+      ) {
+        userRole = "admin";
+      }
+
+      // 1. Resolve existing profile
+      let existingProfile: any = null;
+      try {
+        const { data: prof, error: pErr } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", supabaseUser.id)
+          .maybeSingle();
+        
+        if (!pErr && prof) {
+          existingProfile = prof;
+          userRole = prof.role || userRole;
+        }
+      } catch (e) {
+        console.warn("Notice: check by ID skipped or failed:", e);
+      }
+
+      if (!existingProfile && supabaseUser.email) {
+        try {
+          const { data: profByEmail } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("email", supabaseUser.email)
+            .maybeSingle();
+          
+          if (profByEmail) {
+            existingProfile = profByEmail;
+            userRole = profByEmail.role || userRole;
+          }
+        } catch (e) {
+          console.warn("Notice: check by Email skipped or failed:", e);
+        }
+      }
+
+      const meta = supabaseUser.user_metadata || {};
+      const fullName = meta.full_name || meta.name || meta.given_name || supabaseUser.email?.split("@")[0] || "Google User";
+      const profilePhoto = meta.avatar_url || meta.picture || "";
+
+      const userObj = {
+        id: supabaseUser.id,
+        email: supabaseUser.email || "",
+        name: fullName,
+        role: userRole,
+        companyName: meta.companyName || existingProfile?.companyName || "",
+        mobile: meta.mobile || existingProfile?.mobile || "",
+        city: meta.city || existingProfile?.city || "",
+        vendorId: existingProfile?.vendorId || null,
+        avatar: profilePhoto,
+        provider: "Google",
+        createdAt: existingProfile?.createdAt || new Date().toISOString()
+      };
+
+      // 2. Vendor logic
+      if (userRole === 'vendor' && !userObj.vendorId) {
+        let existingVendor: any = null;
+        try {
+          const { data: vRecord } = await supabase
+            .from("vendors")
+            .select("*")
+            .eq("companyName", userObj.companyName || `${fullName} Inc`)
+            .maybeSingle();
+          if (vRecord) {
+            existingVendor = vRecord;
+          }
+        } catch (e) {}
+
+        if (!existingVendor) {
+          const vendorId = "ven-" + Math.random().toString(36).substring(2, 9);
+          const vendorRecord = {
+            id: vendorId,
+            companyName: userObj.companyName || `${fullName} Solution Providers`,
+            name: fullName,
+            logo: profilePhoto || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=150",
+            gstNumber: "27GSTMOCK12345",
+            panNumber: "PANMOCK1234",
+            website: "https://example.com",
+            businessCategory: "General",
+            productsOffered: [],
+            rating: 5.0,
+            location: userObj.city || "Delhi",
+            approved: false,
+            docVerified: false,
+            plan: 'Free',
+            productsCount: 0,
+            leadsCount: 0,
+            revenue: 0,
+            viewsCount: 0,
+            createdAt: new Date().toISOString()
+          };
+          await supabase.from("vendors").insert([vendorRecord]);
+          userObj.vendorId = vendorId as any;
+
+          await supabase.auth.updateUser({
+            data: { vendorId }
+          });
+        } else {
+          userObj.vendorId = existingVendor.id as any;
+        }
+      }
+
+      // 3. Profiles saving
+      if (!existingProfile) {
+        try {
+          const { error: profInsErr } = await supabase.from("profiles").insert([{
+            id: userObj.id,
+            name: userObj.name,
+            email: userObj.email,
+            companyName: userObj.companyName,
+            mobile: userObj.mobile,
+            city: userObj.city,
+            role: userObj.role,
+            avatar: userObj.avatar,
+            provider: userObj.provider,
+            createdAt: userObj.createdAt
+          }]);
+          if (profInsErr) {
+            console.error("Supabase profile insert error:", profInsErr);
+          }
+        } catch (e) {
+          console.warn("Supabase profiles table sync failed:", e);
+        }
+      }
+
+      // 4. Duplicate Sync to Local Backend
+      try {
+        await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(userObj)
+        });
+      } catch (e) {
+        console.warn("Local sync skipped or failed:", e);
+      }
+
+      // Resend onboarding Welcome Emails / events
+      fetch("/api/resend/trigger-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: userRole === 'vendor' ? 'welcome-vendor' : 'welcome-buyer',
+          payload: {
+            id: userObj.vendorId || userObj.id,
+            name: userObj.name,
+            companyName: userObj.companyName || "Google Sourcing Partner",
+            email: userObj.email,
+            gstNumber: "27GSTMOCK12345",
+            panNumber: "PANMOCK1234",
+            website: "https://example.com",
+            businessCategory: "General Sourcing Partner",
+            city: userObj.city || "Delhi"
+          }
+        })
+      }).catch(err => console.error("Onboarding trigger notice:", err));
+
+      // 5. Update local React states
+      setCurrentUser(userObj);
+      setCurrentRole(userObj.role);
+      setAuthModalOpen(false);
+      setAuthLoading(false);
+      safeAlert(`Successfully authenticated via Google as ${userObj.name}!`, "success");
+
+      // Redirect to correct tab
+      if (userObj.role === 'buyer') {
+        setActiveTab('dashboard');
+      } else if (userObj.role === 'vendor') {
+        setActiveTab('vendor-panel');
+      } else if (userObj.role === 'admin') {
+        setActiveTab('admin-panel');
+      }
+      fetchAllData();
+    } catch (err: any) {
+      console.error("Error setting up Google authenticated session:", err);
+      setAuthLoading(false);
+      safeAlert("Failed completing your Google account setup: " + (err.message || err), "error");
+    }
+  };
 
   // Wishlist state
   const [wishlist, setWishlist] = useState<string[]>(() => {
@@ -2369,6 +2770,37 @@ export default function App() {
                   >
                     Authenticate Session
                   </button>
+                  <div className="relative flex py-1.5 items-center">
+                    <div className="flex-grow border-t border-slate-100"></div>
+                    <span className="flex-shrink mx-3 text-slate-400 text-[10px] font-bold uppercase tracking-wider">or</span>
+                    <div className="flex-grow border-t border-slate-100"></div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleGoogleAuth('login')}
+                    disabled={authLoading}
+                    className="w-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-extrabold py-2.5 rounded-lg text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="#EA4335"
+                        d="M5.26620007,9.76452941 C6.19875005,6.93863435 8.8544399,4.90909091 12,4.90909091 C13.6909091,4.90909091 15.2181818,5.52272727 16.4181818,6.54545455 L19.8272727,3.13636364 C17.7636364,1.19090909 15.0181818,0 12,0 C7.33124803,0 3.32766107,2.83615413 1.5791244,6.92488349 L5.26620007,9.76452941 Z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M23.490008,12.2727273 C23.490008,11.4136364 23.4136444,10.5954545 23.2727354,9.81818182 L12,9.81818182 L12,14.6363636 L18.4545455,14.6363636 C18.1772727,16.1272727 17.3363636,17.3909091 16.0727273,18.2363636 L19.8272727,21.1454545 C22.0227273,19.1181818 23.490008,16.1272727 23.490008,12.2727273 Z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.26620007,14.2354706 L1.5791244,17.0751165 C3.32766107,21.1638459 7.33124803,24 12,24 C15.0181818,24 17.7636364,22.8090909 19.8272727,20.8636364 L16.0727273,17.9545455 C15.0318182,18.65 13.6272727,19.0909091 12,19.0909091 C8.8544399,19.0909091 6.19875005,17.0613657 5.26620007,14.2354706 Z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M5.26620007,9.76452941 C4.98185012,10.6300181 4.82352941,11.5574679 4.82352941,12.5190909 C4.82352941,13.4807139 4.98185012,14.4081637 5.26620007,15.2736524 L1.5791244,18.1132983 C0.570258163,16.4258909 0,14.4925722 0,12.5190909 C0,10.5456096 0.570258163,8.61229093 1.5791244,6.92488349 L5.26620007,9.76452941 Z"
+                      />
+                    </svg>
+                    {authLoading ? "Establishing Connection..." : "Continue with Google"}
+                  </button>
                   <div className="pt-3 border-t border-slate-100 text-center space-y-1 select-none hidden">
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Demo Credentials</p>
                     <p className="text-[10px] text-slate-500 leading-relaxed">
@@ -2471,6 +2903,37 @@ export default function App() {
                     className="w-full bg-[#0066FF] hover:bg-blue-700 text-white font-extrabold py-2.5 rounded-lg text-xs transition-all shadow-sm cursor-pointer mt-2"
                   >
                     Register Account
+                  </button>
+                  <div className="relative flex py-1.5 items-center">
+                    <div className="flex-grow border-t border-slate-100"></div>
+                    <span className="flex-shrink mx-3 text-slate-400 text-[10px] font-bold uppercase tracking-wider">or</span>
+                    <div className="flex-grow border-t border-slate-100"></div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleGoogleAuth('signup')}
+                    disabled={authLoading}
+                    className="w-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-extrabold py-2.5 rounded-lg text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="#EA4335"
+                        d="M5.26620007,9.76452941 C6.19875005,6.93863435 8.8544399,4.90909091 12,4.90909091 C13.6909091,4.90909091 15.2181818,5.52272727 16.4181818,6.54545455 L19.8272727,3.13636364 C17.7636364,1.19090909 15.0181818,0 12,0 C7.33124803,0 3.32766107,2.83615413 1.5791244,6.92488349 L5.26620007,9.76452941 Z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M23.490008,12.2727273 C23.490008,11.4136364 23.4136444,10.5954545 23.2727354,9.81818182 L12,9.81818182 L12,14.6363636 L18.4545455,14.6363636 C18.1772727,16.1272727 17.3363636,17.3909091 16.0727273,18.2363636 L19.8272727,21.1454545 C22.0227273,19.1181818 23.490008,16.1272727 23.490008,12.2727273 Z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.26620007,14.2354706 L1.5791244,17.0751165 C3.32766107,21.1638459 7.33124803,24 12,24 C15.0181818,24 17.7636364,22.8090909 19.8272727,20.8636364 L16.0727273,17.9545455 C15.0318182,18.65 13.6272727,19.0909091 12,19.0909091 C8.8544399,19.0909091 6.19875005,17.0613657 5.26620007,14.2354706 Z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M5.26620007,9.76452941 C4.98185012,10.6300181 4.82352941,11.5574679 4.82352941,12.5190909 C4.82352941,13.4807139 4.98185012,14.4081637 5.26620007,15.2736524 L1.5791244,18.1132983 C0.570258163,16.4258909 0,14.4925722 0,12.5190909 C0,10.5456096 0.570258163,8.61229093 1.5791244,6.92488349 L5.26620007,9.76452941 Z"
+                      />
+                    </svg>
+                    {authLoading ? "Establishing Connection..." : "Continue with Google"}
                   </button>
                 </form>
               )}
