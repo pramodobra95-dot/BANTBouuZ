@@ -456,7 +456,18 @@ const defaultBlogs = [
     readTime: "5 mins read",
     slug: "how-to-choose-crm",
     likes: 0,
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    metaTitle: "How to Choose the Right CRM Software for SME - BANTConfirm",
+    metaDescription: "Read the expert B2B software sourcing guide by Prasanna Nair on choosing scalable CRM applications. Optimize your sales pipeline using BANT framework metrics.",
+    metaKeywords: "CRM software, SME sales pipeline, BANT framework, software selection",
+    focusKeyword: "CRM software",
+    schemaMarkup: JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": "How to Choose the Right CRM Software for Your Growing SME",
+      "author": { "@type": "Person", "name": "Prasanna Nair" },
+      "publisher": { "@type": "Organization", "name": "BANTConfirm" }
+    })
   },
   {
     id: "blog-2",
@@ -469,7 +480,18 @@ const defaultBlogs = [
     readTime: "4 mins read",
     slug: "understanding-bant-leads",
     likes: 0,
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    metaTitle: "Understanding BANT Leads: Enterprise Sales Shortcut - BANTConfirm",
+    metaDescription: "Master the BANT qualification framework for Enterprise B2B SaaS. Learn how pre-qualifying leads on Budget, Authority, Need, and Timeline increases conversions by 3x.",
+    metaKeywords: "BANT leads, B2B sales pipeline, enterprise SaaS procurement",
+    focusKeyword: "BANT Leads",
+    schemaMarkup: JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": "Understanding BANT Leads: The Enterprise Sales Shortcut",
+      "author": { "@type": "Person", "name": "Rohan Das" },
+      "publisher": { "@type": "Organization", "name": "BANTConfirm" }
+    })
   }
 ];
 
@@ -919,9 +941,30 @@ async function initPostgres() {
         date VARCHAR(50),
         category VARCHAR(100),
         tags JSONB DEFAULT '[]'::jsonb,
-        image TEXT
+        image TEXT,
+        slug VARCHAR(200),
+        likes INTEGER DEFAULT 0,
+        createdAt VARCHAR(100),
+        metaTitle VARCHAR(200),
+        metaDescription TEXT,
+        metaKeywords VARCHAR(300),
+        focusKeyword VARCHAR(100),
+        schemaMarkup TEXT
       )
     `);
+
+    try {
+      await client.query(`ALTER TABLE blogs ADD COLUMN IF NOT EXISTS slug VARCHAR(200)`);
+      await client.query(`ALTER TABLE blogs ADD COLUMN IF NOT EXISTS likes INTEGER DEFAULT 0`);
+      await client.query(`ALTER TABLE blogs ADD COLUMN IF NOT EXISTS createdAt VARCHAR(100)`);
+      await client.query(`ALTER TABLE blogs ADD COLUMN IF NOT EXISTS metaTitle VARCHAR(200)`);
+      await client.query(`ALTER TABLE blogs ADD COLUMN IF NOT EXISTS metaDescription TEXT`);
+      await client.query(`ALTER TABLE blogs ADD COLUMN IF NOT EXISTS metaKeywords VARCHAR(300)`);
+      await client.query(`ALTER TABLE blogs ADD COLUMN IF NOT EXISTS focusKeyword VARCHAR(100)`);
+      await client.query(`ALTER TABLE blogs ADD COLUMN IF NOT EXISTS schemaMarkup TEXT`);
+    } catch (e) {
+      console.log("Notice: ALTER TABLE blogs SEO columns migration notice:", e);
+    }
 
     // 6. Create banners table
     await client.query(`
@@ -1088,9 +1131,12 @@ async function initPostgres() {
       console.log("Seeding initial blogs to Postgres...");
       for (const b of defaultBlogs) {
         await client.query(
-          `INSERT INTO blogs (id, title, excerpt, content, author, readTime, date, category, tags, image)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [b.id, b.title, b.content ? b.content.substring(0, 150) + "..." : "", b.content, b.author, b.readTime, b.createdAt, b.category, JSON.stringify(b.tags), b.image]
+          `INSERT INTO blogs (id, title, excerpt, content, author, readTime, date, category, tags, image, slug, likes, createdAt, metaTitle, metaDescription, metaKeywords, focusKeyword, schemaMarkup)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+          [
+            b.id, b.title, b.content ? b.content.substring(0, 150) + "..." : "", b.content, b.author, b.readTime, b.createdAt, b.category, JSON.stringify(b.tags), b.image,
+            b.slug, b.likes || 0, b.createdAt, b.metaTitle || "", b.metaDescription || "", b.metaKeywords || "", b.focusKeyword || "", b.schemaMarkup || ""
+          ]
         );
       }
     }
@@ -2708,7 +2754,7 @@ app.get("/api/blogs", (req, res) => {
   res.json(db.blogs);
 });
 
-app.post("/api/blogs", (req, res) => {
+app.post("/api/blogs", async (req, res) => {
   const b = req.body;
   const newBlog = {
     id: `blog-${Date.now()}`,
@@ -2719,31 +2765,77 @@ app.post("/api/blogs", (req, res) => {
     tags: Array.isArray(b.tags) ? b.tags : [],
     author: b.author || "Admin",
     readTime: b.readTime || "5 mins read",
-    slug: (b.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+    slug: b.slug || (b.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
     likes: b.likes || 0,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    metaTitle: b.metaTitle || `${b.title} - BANTConfirm`,
+    metaDescription: b.metaDescription || (b.content ? b.content.substring(0, 155) + "..." : ""),
+    metaKeywords: b.metaKeywords || (Array.isArray(b.tags) ? b.tags.join(", ") : ""),
+    focusKeyword: b.focusKeyword || "",
+    schemaMarkup: b.schemaMarkup || JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": b.title,
+      "author": { "@type": "Person", "name": b.author || "Admin" },
+      "publisher": { "@type": "Organization", "name": "BANTConfirm" }
+    })
   };
+  
   db.blogs.push(newBlog);
   saveDb();
+
+  if (pgPool) {
+    try {
+      await pgPool.query(
+        `INSERT INTO blogs (id, title, excerpt, content, author, readTime, date, category, tags, image, slug, likes, createdAt, metaTitle, metaDescription, metaKeywords, focusKeyword, schemaMarkup)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+        [
+          newBlog.id, newBlog.title, newBlog.content ? newBlog.content.substring(0, 150) + "..." : "", newBlog.content, newBlog.author, newBlog.readTime, newBlog.createdAt, newBlog.category, JSON.stringify(newBlog.tags), newBlog.image,
+          newBlog.slug, newBlog.likes, newBlog.createdAt, newBlog.metaTitle, newBlog.metaDescription, newBlog.metaKeywords, newBlog.focusKeyword, newBlog.schemaMarkup
+        ]
+      );
+    } catch (e) {
+      console.error("Failed to sync new blog to PostgreSQL:", e);
+    }
+  }
+
   res.status(201).json(newBlog);
 });
 
-app.post("/api/blogs/:id/like", (req, res) => {
+app.post("/api/blogs/:id/like", async (req, res) => {
   const blog = db.blogs.find(b => b.id === req.params.id);
   if (blog) {
     blog.likes = (blog.likes || 0) + 1;
     saveDb();
+    
+    if (pgPool) {
+      try {
+        await pgPool.query("UPDATE blogs SET likes = $1 WHERE id = $2", [blog.likes, blog.id]);
+      } catch (e) {
+        console.error("Failed to sync like count to PostgreSQL:", e);
+      }
+    }
+    
     res.json({ success: true, likes: blog.likes });
   } else {
     res.status(404).json({ error: "Blog not found" });
   }
 });
 
-app.delete("/api/blogs/:id", (req, res) => {
+app.delete("/api/blogs/:id", async (req, res) => {
   const idx = db.blogs.findIndex(b => b.id === req.params.id);
   if (idx !== -1) {
     db.blogs.splice(idx, 1);
     saveDb();
+    
+    if (pgPool) {
+      try {
+        await pgPool.query("DELETE FROM blogs WHERE id = $1", [req.params.id]);
+      } catch (e) {
+        console.error("Failed to delete blog from PostgreSQL:", e);
+      }
+    }
+    
     res.json({ success: true });
   } else {
     res.status(404).json({ error: "Blog not found" });

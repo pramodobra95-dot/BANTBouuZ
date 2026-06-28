@@ -112,6 +112,11 @@ export interface Blog {
   slug: string;
   likes?: number;
   createdAt: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
+  focusKeyword?: string;
+  schemaMarkup?: string;
 }
 
 export interface Banner {

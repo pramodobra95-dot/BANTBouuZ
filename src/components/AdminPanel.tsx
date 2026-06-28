@@ -315,13 +315,19 @@ export default function AdminPanel({
 
   // New Blog form state
   const [showBlogForm, setShowBlogForm] = useState(false);
+  const [showSeoAccordion, setShowSeoAccordion] = useState(false);
   const [blogForm, setBlogForm] = useState({
     title: "",
     content: "",
     category: "CRM & Sales",
     image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop",
     tagsText: "Sourcing, BANT, CRM",
-    author: "BANTConfirm Editorial"
+    author: "BANTConfirm Editorial",
+    metaTitle: "",
+    metaDescription: "",
+    metaKeywords: "",
+    focusKeyword: "",
+    schemaMarkup: ""
   });
 
   const handleBlogImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,6 +361,26 @@ export default function AdminPanel({
   const handleBlogSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const tags = blogForm.tagsText.split(",").map(t => t.trim());
+    
+    let finalSchema = "";
+    if (blogForm.schemaMarkup.trim()) {
+      try {
+        const parsed = JSON.parse(blogForm.schemaMarkup);
+        finalSchema = JSON.stringify(parsed);
+      } catch (err) {
+        console.error("Invalid schema JSON, using raw text input:", err);
+        finalSchema = blogForm.schemaMarkup.trim();
+      }
+    } else {
+      finalSchema = JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": blogForm.title,
+        "author": { "@type": "Person", "name": blogForm.author },
+        "publisher": { "@type": "Organization", "name": "BANTConfirm" }
+      });
+    }
+
     onAddBlog({
       title: blogForm.title,
       content: blogForm.content,
@@ -362,7 +388,12 @@ export default function AdminPanel({
       image: blogForm.image,
       tags,
       author: blogForm.author,
-      readTime: "4 mins read"
+      readTime: "4 mins read",
+      metaTitle: blogForm.metaTitle.trim() || `${blogForm.title} - BANTConfirm`,
+      metaDescription: blogForm.metaDescription.trim() || (blogForm.content ? blogForm.content.substring(0, 155) + "..." : ""),
+      metaKeywords: blogForm.metaKeywords.trim() || tags.join(", "),
+      focusKeyword: blogForm.focusKeyword.trim(),
+      schemaMarkup: finalSchema
     });
     setShowBlogForm(false);
     setBlogForm({
@@ -371,7 +402,12 @@ export default function AdminPanel({
       category: "CRM & Sales",
       image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop",
       tagsText: "Sourcing, BANT, CRM",
-      author: "BANTConfirm Editorial"
+      author: "BANTConfirm Editorial",
+      metaTitle: "",
+      metaDescription: "",
+      metaKeywords: "",
+      focusKeyword: "",
+      schemaMarkup: ""
     });
   };
 
@@ -1668,6 +1704,81 @@ export default function AdminPanel({
                     placeholder="Write detailed advice and sourcing checklists here..."
                     className="w-full bg-white border rounded p-1.5"
                   />
+                </div>
+
+                {/* Technical SEO Section */}
+                <div className="col-span-2 border-t border-slate-200/80 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowSeoAccordion(!showSeoAccordion)}
+                    className="flex items-center justify-between w-full bg-slate-100 hover:bg-slate-200/80 p-2 rounded-lg font-bold text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <span>🔍 Technical SEO & Schema Configuration</span>
+                    <span className="text-xs">{showSeoAccordion ? "Collapse ▲" : "Expand ▼"}</span>
+                  </button>
+
+                  {showSeoAccordion && (
+                    <div className="mt-3 space-y-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-xs text-left">
+                      <div>
+                        <label className="block text-slate-500 font-bold mb-1">Custom Meta Title</label>
+                        <input
+                          type="text"
+                          value={blogForm.metaTitle}
+                          onChange={(e) => setBlogForm({...blogForm, metaTitle: e.target.value})}
+                          placeholder="e.g. ERP Sourcing: How to Select the Perfect B2B System"
+                          className="w-full bg-white border rounded p-1.5"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Recommended length: 50-60 characters.</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-500 font-bold mb-1">Custom Meta Description</label>
+                        <textarea
+                          rows={2}
+                          value={blogForm.metaDescription}
+                          onChange={(e) => setBlogForm({...blogForm, metaDescription: e.target.value})}
+                          placeholder="Provide a search snippet summarizing key points (max 155 characters)."
+                          className="w-full bg-white border rounded p-1.5"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Recommended length: 120-155 characters.</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-500 font-bold mb-1">Focus Keyword</label>
+                          <input
+                            type="text"
+                            value={blogForm.focusKeyword}
+                            onChange={(e) => setBlogForm({...blogForm, focusKeyword: e.target.value})}
+                            placeholder="e.g. ERP Sourcing"
+                            className="w-full bg-white border rounded p-1.5"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-500 font-bold mb-1">Meta Keywords</label>
+                          <input
+                            type="text"
+                            value={blogForm.metaKeywords}
+                            onChange={(e) => setBlogForm({...blogForm, metaKeywords: e.target.value})}
+                            placeholder="e.g. erp, b2b, software selection"
+                            className="w-full bg-white border rounded p-1.5"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-500 font-bold mb-1">JSON-LD Structured Schema Markup</label>
+                        <textarea
+                          rows={3}
+                          value={blogForm.schemaMarkup}
+                          onChange={(e) => setBlogForm({...blogForm, schemaMarkup: e.target.value})}
+                          placeholder={`{\n  "@context": "https://schema.org",\n  "@type": "BlogPosting",\n  "headline": "..."\n}`}
+                          className="w-full bg-white border rounded p-1.5 font-mono text-[10px]"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Input raw JSON schema to define custom Rich Snippet metadata.</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex justify-end space-x-2">

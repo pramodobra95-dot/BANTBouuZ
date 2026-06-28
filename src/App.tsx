@@ -15,6 +15,7 @@ import BecomePartnerView from "./components/BecomePartnerView";
 import AIChatBot from "./components/AIChatBot";
 import Footer from "./components/Footer";
 import SEOViewer from "./components/SEOViewer";
+import { AboutPage, TermsPage, PrivacyPage } from "./components/CMSPages";
 import { safeAlert } from "./utils/safeAlert";
 import { supabase, isSupabaseConfigured } from "./lib/supabaseClient";
 
@@ -2559,67 +2560,11 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
-                className="max-w-3xl mx-auto px-6 py-12 space-y-6"
+                className="max-w-4xl mx-auto px-6 py-12"
               >
-                <div className="border-b border-slate-100 pb-4">
-                  <span className="text-[10px] font-black tracking-wider text-slate-400 uppercase">Platform Documentation</span>
-                  <h2 className="text-3xl font-black text-slate-900 mt-1 tracking-tight">
-                    {activeTab === 'about' ? 'About BANTConfirm' : activeTab === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
-                  </h2>
-                </div>
-                
-                <div className="bg-white p-8 rounded-2xl border border-slate-200/80 leading-relaxed text-xs text-slate-600 space-y-4 shadow-xs">
-                  {cmsPages[activeTab] ? (
-                    cmsPages[activeTab].split("\n").map((para, idx) => {
-                      const trimmed = para.trim();
-                      if (!trimmed) return <div key={idx} className="h-2" />;
-                      
-                      // Check for bullet points starting with '-'
-                      if (trimmed.startsWith("- ")) {
-                        const content = trimmed.slice(2);
-                        const colonIdx = content.indexOf(":");
-                        if (colonIdx !== -1) {
-                          const boldHeader = content.slice(0, colonIdx + 1);
-                          const rest = content.slice(colonIdx + 1);
-                          return (
-                            <div key={idx} className="flex items-start gap-2 pl-4">
-                              <span className="text-[#0066FF] font-black mt-0.5">•</span>
-                              <p className="text-xs">
-                                <strong className="text-slate-800 font-bold">{boldHeader}</strong>
-                                {rest}
-                              </p>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={idx} className="flex items-start gap-2 pl-4">
-                            <span className="text-[#0066FF] font-black mt-0.5">•</span>
-                            <p className="text-xs">{content}</p>
-                          </div>
-                        );
-                      }
-                      
-                      // Check for numbered points starting with numbers
-                      if (/^\d+\./.test(trimmed)) {
-                        const colonIdx = trimmed.indexOf(":");
-                        if (colonIdx !== -1) {
-                          const boldHeader = trimmed.slice(0, colonIdx + 1);
-                          const rest = trimmed.slice(colonIdx + 1);
-                          return (
-                            <p key={idx} className="text-xs text-slate-700">
-                              <strong className="text-slate-900 font-extrabold">{boldHeader}</strong>
-                              {rest}
-                            </p>
-                          );
-                        }
-                      }
-                      
-                      return <p key={idx} className="text-xs text-slate-600 font-medium leading-relaxed">{para}</p>;
-                    })
-                  ) : (
-                    <p className="text-slate-400 italic">Dynamic content is loading...</p>
-                  )}
-                </div>
+                {activeTab === 'about' && <AboutPage />}
+                {activeTab === 'terms' && <TermsPage />}
+                {activeTab === 'privacy' && <PrivacyPage />}
               </motion.div>
             )}
 
