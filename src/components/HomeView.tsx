@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Search, Shield, Layers, Users, Star, ArrowRight, Phone, MessageSquare, 
@@ -25,6 +26,7 @@ interface HomeViewProps {
   onAddToWishlist: (productId: string) => void;
   wishlist: string[];
   onLikeBlog?: (blogId: string) => void;
+  onSelectBlog?: (blog: Blog) => void;
 }
 
 const LOCAL_FALLBACK_TESTIMONIALS: Testimonial[] = [
@@ -89,8 +91,10 @@ export default function HomeView({
   onNavigateToTab,
   onAddToWishlist,
   wishlist,
-  onLikeBlog
+  onLikeBlog,
+  onSelectBlog
 }: HomeViewProps) {
+  const navigate = useNavigate();
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
   const [isOrbitPaused, setIsOrbitPaused] = useState(false);
@@ -304,22 +308,8 @@ export default function HomeView({
   });
 
   const handleOpenProduct = (p: Product) => {
-    setSelectedProduct(p);
-    setModalTab('overview');
-    setSeoTitle(`${p.name} Sourcing Quote & Pricing - BANTConfirm`);
-    setSeoDesc(`Compare verified features, customer reviews, and direct vendor pricing for ${p.name}. Sourced by verified Gold Partner ${p.vendorName}.`);
-    setSeoKeywords(`${p.name}, ${p.category} software, ${p.vendorName} price, BANT quotes`);
-    setQuoteRequestSent(false);
-    setQuoteForm({
-      name: currentUser?.name || "",
-      email: currentUser?.email || "",
-      phone: currentUser?.mobile || "",
-      qty: "20-100 users / endpoints",
-      notes: ""
-    });
-    // Increment product view
-    fetch(`/api/products/${p.id}/view`, { method: "POST" })
-      .catch(err => console.error("Failed to increment views", err));
+    const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    navigate(`/products/${slug}`);
   };
 
   const handleQuoteSubmit = (e: React.FormEvent) => {
@@ -650,11 +640,14 @@ export default function HomeView({
               )}
 
               {/* Product Image */}
-              <div className="h-44 bg-slate-100 overflow-hidden relative">
+              <div 
+                onClick={() => handleOpenProduct(p)}
+                className="h-44 bg-slate-100 overflow-hidden relative cursor-pointer group/img"
+              >
                 <img 
                   src={p.images[0] || "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=500&auto=format&fit=crop"} 
                   alt={p.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300"
+                  className="w-full h-full object-cover group-hover/img:scale-105 transition-all duration-300"
                   referrerPolicy="no-referrer"
                 />
                 <span className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] px-2 py-1 rounded">
@@ -664,15 +657,15 @@ export default function HomeView({
 
               {/* Product Info */}
               <div className="p-4 flex-1 flex flex-col space-y-3">
-                <div>
+                <div onClick={() => handleOpenProduct(p)} className="cursor-pointer group/info">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#0066FF] font-bold uppercase tracking-wider">Verified Solution Provider</span>
+                    <span className="text-[11px] text-[#0066FF] font-bold uppercase tracking-wider group-hover/info:underline">Verified Solution Provider</span>
                     <div className="flex items-center text-xs text-yellow-500 font-bold gap-0.5">
                       <Star className="w-3.5 h-3.5 fill-yellow-500" />
                       <span>{p.rating}</span>
                     </div>
                   </div>
-                  <h4 className="font-bold text-sm text-slate-800 mt-1 line-clamp-1 group-hover:text-[#0066FF] transition-colors">{p.name}</h4>
+                  <h4 className="font-bold text-sm text-slate-800 mt-1 line-clamp-1 group-hover/info:text-[#0066FF] transition-colors">{p.name}</h4>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{p.description}</p>
                 </div>
 
@@ -1175,7 +1168,10 @@ export default function HomeView({
           {blogs.map((blog) => (
             <div 
               key={blog.id}
-              className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col md:flex-row group"
+              onClick={() => {
+                if (onSelectBlog) onSelectBlog(blog);
+              }}
+              className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col md:flex-row group cursor-pointer hover:border-blue-400 hover:shadow-md transition-all duration-200"
             >
               <div className="md:w-1/3 h-44 md:h-auto bg-slate-100 overflow-hidden shrink-0 relative">
                 <img 

@@ -8,6 +8,7 @@ import {
   Menu, X, AlertCircle, AlertTriangle, Info, Copy, Facebook, Instagram, Linkedin
 } from "lucide-react";
 import HomeView from "./components/HomeView";
+import ProductDetailPage from "./components/ProductDetailPage";
 import UserPanel from "./components/UserPanel";
 import VendorPanel from "./components/VendorPanel";
 import AdminPanel from "./components/AdminPanel";
@@ -159,12 +160,38 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Wishlist state
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    try {
+      const saved = typeof window !== "undefined" ? localStorage.getItem("bantconfirm_wishlist") : null;
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.warn("Storage access is blocked or restricted:", e);
+      return [];
+    }
+  });
+
+  // State arrays fetched from backend
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [blogs, setBlogs] = useState<Blog[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [trustedVendors, setTrustedVendors] = useState<TrustedVendor[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [cmsPages, setCmsPages] = useState<Record<string, string>>({});
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  const [selectedBlog, setSelectedBlog] = useState<Blog | null>(null);
+
   // Current simulating role & navigation tabs
   const [currentRole, setCurrentRole] = useState<'buyer' | 'vendor' | 'admin'>('buyer');
   
   const getActiveTabFromPath = (path: string): string => {
     const p = path.toLowerCase().replace(/\/$/, "");
     if (p === "") return "home";
+    if (p.startsWith("/products/")) return "product-detail";
     if (p === "/about") return "about";
     if (p === "/contact") return "contact";
     if (p === "/services") return "home"; // solutions
@@ -329,7 +356,47 @@ export default function App() {
     if (pathname === "") pathname = "/";
     if (pathname === "/blogs") pathname = "/blog";
 
-    const seo = seoMap[pathname] || seoMap["/"];
+    let seo = seoMap[pathname] || seoMap["/"];
+
+    if (pathname.startsWith("/products/")) {
+      const slug = pathname.substring("/products/".length);
+      const matchedProd = products.find(p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slug || p.id === slug);
+      if (matchedProd) {
+        seo = {
+          title: `${matchedProd.name} Specs, Pricing & BANT Verification | BANTConfirm`,
+          description: `Compare detailed technical specs, customer reviews, and direct vendor pricing for ${matchedProd.name} under category ${matchedProd.category}. Verify decision authority and matching budget constraints.`,
+          canonical: `https://www.bantconfirm.com/products/${slug}`,
+          schema: {
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": matchedProd.name,
+            "description": matchedProd.description,
+            "image": matchedProd.images?.[0] || "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&auto=format&fit=crop",
+            "brand": {
+              "@type": "Brand",
+              "name": matchedProd.vendorName
+            },
+            "offers": {
+              "@type": "Offer",
+              "price": "45000",
+              "priceCurrency": "INR"
+            }
+          }
+        };
+      } else {
+        seo = {
+          title: "BANT Certified Product Sourcing | BANTConfirm",
+          description: "Explore enterprise software and hardware solutions pre-qualified across Budget, Authority, Need, and Sourcing Timeline constraints.",
+          canonical: `https://www.bantconfirm.com${location.pathname}`,
+          schema: {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "BANTConfirm",
+            "url": "https://www.bantconfirm.com/"
+          }
+        };
+      }
+    }
 
     // Update document title
     document.title = seo.title;
@@ -388,7 +455,10 @@ export default function App() {
 
     // Scroll to top on route transitions
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [location.pathname]);
+    if (location.pathname !== "/blog") {
+      setSelectedBlog(null);
+    }
+  }, [location.pathname, products]);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [prefilledCategory, setPrefilledCategory] = useState<string | undefined>(undefined);
@@ -736,30 +806,6 @@ export default function App() {
       safeAlert("Failed completing your Google account setup: " + (err.message || err), "error");
     }
   };
-
-  // Wishlist state
-  const [wishlist, setWishlist] = useState<string[]>(() => {
-    try {
-      const saved = typeof window !== "undefined" ? localStorage.getItem("bantconfirm_wishlist") : null;
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.warn("Storage access is blocked or restricted:", e);
-      return [];
-    }
-  });
-
-  // State arrays fetched from backend
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [blogs, setBlogs] = useState<Blog[]>([]);
-  const [banners, setBanners] = useState<Banner[]>([]);
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  const [trustedVendors, setTrustedVendors] = useState<TrustedVendor[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [cmsPages, setCmsPages] = useState<Record<string, string>>({});
-  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
 
   // Loading flags
   const [loading, setLoading] = useState(true);
@@ -1229,6 +1275,30 @@ export default function App() {
           } else if (payload.eventType === "DELETE") {
             const deletedId = payload.old.id;
             setRegisteredUsers((prev) => prev.filter((u) => u.id !== deletedId));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trusted_vendors" },
+        (payload: any) => {
+          console.log("Realtime Trusted Vendors change received:", payload);
+          if (payload.eventType === "INSERT") {
+            const newVendor = payload.new;
+            setTrustedVendors((prev) => {
+              if (prev.some((v) => v.id === newVendor.id)) return prev;
+              return [...prev, newVendor].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+            });
+            safeAlert(`Trusted Vendor Added: ${newVendor.vendor_name}`, "success");
+          } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new;
+            setTrustedVendors((prev) =>
+              prev.map((v) => (v.id === updated.id ? { ...v, ...updated } : v))
+                  .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+            );
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = payload.old.id;
+            setTrustedVendors((prev) => prev.filter((v) => v.id !== deletedId));
           }
         }
       )
@@ -2652,6 +2722,27 @@ export default function App() {
                   onAddToWishlist={handleAddToWishlist}
                   wishlist={wishlist}
                   onLikeBlog={handleLikeBlog}
+                  onSelectBlog={(blog) => {
+                    setSelectedBlog(blog);
+                    setActiveTab("blogs");
+                  }}
+                />
+              </motion.div>
+            )}
+
+            {/* Product Detail view */}
+            {activeTab === 'product-detail' && (
+              <motion.div
+                key="product-detail"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <ProductDetailPage 
+                  products={products}
+                  onPostLead={handlePostLead}
+                  currentUser={currentUser}
                 />
               </motion.div>
             )}
@@ -2665,7 +2756,12 @@ export default function App() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                <BlogsView blogs={blogs} onLikeBlog={handleLikeBlog} />
+                <BlogsView 
+                  blogs={blogs} 
+                  onLikeBlog={handleLikeBlog} 
+                  selectedBlog={selectedBlog}
+                  onSelectBlog={setSelectedBlog}
+                />
               </motion.div>
             )}
 
@@ -3353,7 +3449,7 @@ export default function App() {
 
               {/* Table Switcher Tabs */}
               <div className="flex flex-wrap bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1">
-                {["products", "categories", "leads", "profiles", "all"].map((tabName) => (
+                {["products", "categories", "leads", "profiles", "trusted_vendors", "all"].map((tabName) => (
                   <button
                     key={tabName}
                     type="button"
@@ -3364,7 +3460,7 @@ export default function App() {
                         : "text-slate-400 hover:text-white hover:bg-slate-900"
                     }`}
                   >
-                    {tabName === "all" ? "Fix All" : `${tabName}`}
+                    {tabName === "all" ? "Fix All" : tabName === "trusted_vendors" ? "Trusted Vendors" : `${tabName}`}
                   </button>
                 ))}
               </div>
@@ -3396,8 +3492,118 @@ export default function App() {
                         sql = `-- Fix Row Level Security policies for leads table\nALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to insert leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to update leads" ON public.leads;\nDROP POLICY IF EXISTS "Allow anyone to delete leads" ON public.leads;\n\nCREATE POLICY "Allow public read access on leads" ON public.leads \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert leads" ON public.leads \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update leads" ON public.leads \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete leads" ON public.leads \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.leads TO anon, authenticated, service_role;`;
                       } else if (supabaseRlsErrorTable === "profiles") {
                         sql = `-- Fix Row Level Security policies for profiles table\nALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to insert profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to update profiles" ON public.profiles;\nDROP POLICY IF EXISTS "Allow anyone to delete profiles" ON public.profiles;\n\nCREATE POLICY "Allow public read access on profiles" ON public.profiles \nFOR SELECT TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to insert profiles" ON public.profiles \nFOR INSERT TO public, anon, authenticated WITH CHECK (true);\n\nCREATE POLICY "Allow anyone to update profiles" ON public.profiles \nFOR UPDATE TO public, anon, authenticated USING (true);\n\nCREATE POLICY "Allow anyone to delete profiles" ON public.profiles \nFOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.profiles TO anon, authenticated, service_role;`;
+                      } else if (supabaseRlsErrorTable === "trusted_vendors") {
+                        sql = `-- Create trusted_vendors table & RLS policies\nCREATE TABLE IF NOT EXISTS public.trusted_vendors (\n  id TEXT PRIMARY KEY,\n  vendor_name TEXT NOT NULL,\n  logo_url TEXT NOT NULL,\n  website_url TEXT,\n  display_order INTEGER DEFAULT 0,\n  is_active BOOLEAN DEFAULT true,\n  "createdAt" TIMESTAMPTZ DEFAULT NOW()\n);\n\nALTER TABLE public.trusted_vendors DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.trusted_vendors ENABLE ROW LEVEL SECURITY;\n\nDROP POLICY IF EXISTS "Allow public read access on trusted_vendors" ON public.trusted_vendors;\nDROP POLICY IF EXISTS "Allow anyone to insert trusted_vendors" ON public.trusted_vendors;\nDROP POLICY IF EXISTS "Allow anyone to update trusted_vendors" ON public.trusted_vendors;\nDROP POLICY IF EXISTS "Allow anyone to delete trusted_vendors" ON public.trusted_vendors;\n\nCREATE POLICY "Allow public read access on trusted_vendors" ON public.trusted_vendors FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to insert trusted_vendors" ON public.trusted_vendors FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY "Allow anyone to update trusted_vendors" ON public.trusted_vendors FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY "Allow anyone to delete trusted_vendors" ON public.trusted_vendors FOR DELETE TO public, anon, authenticated USING (true);\n\nGRANT ALL ON public.trusted_vendors TO anon, authenticated, service_role;`;
                       } else {
-                        sql = `"-- 1. Fix products table RLS and policies\nALTER TABLE public.products DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.products ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"Allow public read access on products\" ON public.products;\nDROP POLICY IF EXISTS \"Allow anyone to insert products\" ON public.products;\nDROP POLICY IF EXISTS \"Allow anyone to update products\" ON public.products;\nDROP POLICY IF EXISTS \"Allow anyone to delete products\" ON public.products;\nCREATE POLICY \"Allow public read access on products\" ON public.products FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to insert products\" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY \"Allow anyone to update products\" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to delete products\" ON public.products FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.products TO anon, authenticated, service_role;\n\n-- 2. Fix categories table RLS and policies\nALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"Allow public read access on categories\" ON public.categories;\nDROP POLICY IF EXISTS \"Allow anyone to insert categories\" ON public.categories;\nDROP POLICY IF EXISTS \"Allow anyone to update categories\" ON public.categories;\nDROP POLICY IF EXISTS \"Allow anyone to delete categories\" ON public.categories;\nCREATE POLICY \"Allow public read access on categories\" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to insert categories\" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY \"Allow anyone to update categories\" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to delete categories\" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.categories TO anon, authenticated, service_role;\n\n-- 3. Fix leads table RLS and policies\nALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"Allow public read access on leads\" ON public.leads;\nDROP POLICY IF EXISTS \"Allow anyone to insert leads\" ON public.leads;\nDROP POLICY IF EXISTS \"Allow anyone to update leads\" ON public.leads;\nDROP POLICY IF EXISTS \"Allow anyone to delete leads\" ON public.leads;\nCREATE POLICY \"Allow public read access on leads\" ON public.leads FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to insert leads\" ON public.leads FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY \"Allow anyone to update leads\" ON public.leads FOR UPDATE USING (true);\nCREATE POLICY \"Allow anyone to delete leads\" ON public.leads FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.leads TO anon, authenticated, service_role;\n\n-- 4. Fix profiles table RLS and policies\nCREATE TABLE IF NOT EXISTS public.profiles (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, \"companyName\" TEXT, mobile TEXT, city TEXT, role TEXT DEFAULT 'buyer', \"createdAt\" TIMESTAMPTZ DEFAULT NOW());\nALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS \"Allow public read access on profiles\" ON public.profiles;\nDROP POLICY IF EXISTS \"Allow anyone to insert profiles\" ON public.profiles;\nDROP POLICY IF EXISTS \"Allow anyone to update profiles\" ON public.profiles;\nDROP POLICY IF EXISTS \"Allow anyone to delete profiles\" ON public.profiles;\nCREATE POLICY \"Allow public read access on profiles\" ON public.profiles FOR SELECT TO public, anon, authenticated USING (true);\nCREATE POLICY \"Allow anyone to insert profiles\" ON public.profiles FOR INSERT TO public, anon, authenticated WITH CHECK (true);\nCREATE POLICY \"Allow anyone to update profiles\" ON public.profiles FOR UPDATE USING (true);\nCREATE POLICY \"Allow anyone to delete profiles\" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);\nGRANT ALL ON public.profiles TO anon, authenticated, service_role;\n\n-- 5. Enable Realtime Replication for instant synchronization\nALTER TABLE public.profiles REPLICA IDENTITY FULL;\nALTER TABLE public.leads REPLICA IDENTITY FULL;\n\nDO $$\nBEGIN\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_publication_tables \n    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'profiles'\n  ) THEN\n    ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_publication_tables \n    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'leads'\n  ) THEN\n    ALTER PUBLICATION supabase_realtime ADD TABLE public.leads;\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_publication_tables \n    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'products'\n  ) THEN\n    ALTER PUBLICATION supabase_realtime ADD TABLE public.products;\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_publication_tables \n    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'categories'\n  ) THEN\n    ALTER PUBLICATION supabase_realtime ADD TABLE public.categories;\n  END IF;\nEND $$;\n`
+                        sql = `-- 1. Fix products table RLS and policies
+ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on products" ON public.products;
+DROP POLICY IF EXISTS "Allow anyone to insert products" ON public.products;
+DROP POLICY IF EXISTS "Allow anyone to update products" ON public.products;
+DROP POLICY IF EXISTS "Allow anyone to delete products" ON public.products;
+CREATE POLICY "Allow public read access on products" ON public.products FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert products" ON public.products FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update products" ON public.products FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to delete products" ON public.products FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.products TO anon, authenticated, service_role;
+
+-- 2. Fix categories table RLS and policies
+ALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to insert categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to update categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow anyone to delete categories" ON public.categories;
+CREATE POLICY "Allow public read access on categories" ON public.categories FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert categories" ON public.categories FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update categories" ON public.categories FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to delete categories" ON public.categories FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.categories TO anon, authenticated, service_role;
+
+-- 3. Fix leads table RLS and policies
+ALTER TABLE public.leads DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to insert leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to update leads" ON public.leads;
+DROP POLICY IF EXISTS "Allow anyone to delete leads" ON public.leads;
+CREATE POLICY "Allow public read access on leads" ON public.leads FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert leads" ON public.leads FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update leads" ON public.leads FOR UPDATE USING (true);
+CREATE POLICY "Allow anyone to delete leads" ON public.leads FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.leads TO anon, authenticated, service_role;
+
+-- 4. Fix profiles table RLS and policies
+CREATE TABLE IF NOT EXISTS public.profiles (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, "companyName" TEXT, mobile TEXT, city TEXT, role TEXT DEFAULT 'buyer', "createdAt" TIMESTAMPTZ DEFAULT NOW());
+ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to insert profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to update profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow anyone to delete profiles" ON public.profiles;
+CREATE POLICY "Allow public read access on profiles" ON public.profiles FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert profiles" ON public.profiles FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update profiles" ON public.profiles FOR UPDATE USING (true);
+CREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.profiles TO anon, authenticated, service_role;
+
+-- 5. Fix trusted_vendors table RLS and policies
+CREATE TABLE IF NOT EXISTS public.trusted_vendors (id TEXT PRIMARY KEY, vendor_name TEXT NOT NULL, logo_url TEXT NOT NULL, website_url TEXT, display_order INTEGER DEFAULT 0, is_active BOOLEAN DEFAULT true, "createdAt" TIMESTAMPTZ DEFAULT NOW());
+ALTER TABLE public.trusted_vendors DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trusted_vendors ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to insert trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to update trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to delete trusted_vendors" ON public.trusted_vendors;
+CREATE POLICY "Allow public read access on trusted_vendors" ON public.trusted_vendors FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert trusted_vendors" ON public.trusted_vendors FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update trusted_vendors" ON public.trusted_vendors FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to delete trusted_vendors" ON public.trusted_vendors FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.trusted_vendors TO anon, authenticated, service_role;
+
+-- 6. Enable Realtime Replication for instant synchronization
+ALTER TABLE public.profiles REPLICA IDENTITY FULL;
+ALTER TABLE public.leads REPLICA IDENTITY FULL;
+ALTER TABLE public.trusted_vendors REPLICA IDENTITY FULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'profiles'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'leads'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.leads;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'products'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'categories'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.categories;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'trusted_vendors'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.trusted_vendors;
+  END IF;
+END $$;`;
                       }
                       navigator.clipboard.writeText(sql);
                       safeAlert("SQL Script Copied! Paste this in your Supabase SQL Editor and click Run.", "success");
@@ -3499,6 +3705,36 @@ CREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE TO
 -- Grant privileges
 GRANT ALL ON public.profiles TO anon, authenticated, service_role;`
                   )}
+                  {supabaseRlsErrorTable === "trusted_vendors" && (
+`-- Create trusted_vendors table & RLS policies
+CREATE TABLE IF NOT EXISTS public.trusted_vendors (
+  id TEXT PRIMARY KEY,
+  vendor_name TEXT NOT NULL,
+  logo_url TEXT NOT NULL,
+  website_url TEXT,
+  display_order INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.trusted_vendors DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trusted_vendors ENABLE ROW LEVEL SECURITY;
+
+-- Drop previous policies
+DROP POLICY IF EXISTS "Allow public read access on trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to insert trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to update trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to delete trusted_vendors" ON public.trusted_vendors;
+
+-- Create full select, insert, update and delete policies
+CREATE POLICY "Allow public read access on trusted_vendors" ON public.trusted_vendors FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert trusted_vendors" ON public.trusted_vendors FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update trusted_vendors" ON public.trusted_vendors FOR UPDATE USING (true);
+CREATE POLICY "Allow anyone to delete trusted_vendors" ON public.trusted_vendors FOR DELETE TO public, anon, authenticated USING (true);
+
+-- Grant privileges
+GRANT ALL ON public.trusted_vendors TO anon, authenticated, service_role;`
+                  )}
                   {supabaseRlsErrorTable === "all" && (
 `-- 1. Fix products table RLS and policies
 ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
@@ -3562,9 +3798,32 @@ CREATE POLICY "Allow anyone to update profiles" ON public.profiles FOR UPDATE US
 CREATE POLICY "Allow anyone to delete profiles" ON public.profiles FOR DELETE TO public, anon, authenticated USING (true);
 GRANT ALL ON public.profiles TO anon, authenticated, service_role;
 
--- 5. Enable Realtime Replication for instant synchronization
+-- 5. Fix trusted_vendors table RLS and policies
+CREATE TABLE IF NOT EXISTS public.trusted_vendors (
+  id TEXT PRIMARY KEY,
+  vendor_name TEXT NOT NULL,
+  logo_url TEXT NOT NULL,
+  website_url TEXT,
+  display_order INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.trusted_vendors DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trusted_vendors ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to insert trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to update trusted_vendors" ON public.trusted_vendors;
+DROP POLICY IF EXISTS "Allow anyone to delete trusted_vendors" ON public.trusted_vendors;
+CREATE POLICY "Allow public read access on trusted_vendors" ON public.trusted_vendors FOR SELECT TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to insert trusted_vendors" ON public.trusted_vendors FOR INSERT TO public, anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow anyone to update trusted_vendors" ON public.trusted_vendors FOR UPDATE TO public, anon, authenticated USING (true);
+CREATE POLICY "Allow anyone to delete trusted_vendors" ON public.trusted_vendors FOR DELETE TO public, anon, authenticated USING (true);
+GRANT ALL ON public.trusted_vendors TO anon, authenticated, service_role;
+
+-- 6. Enable Realtime Replication for instant synchronization
 ALTER TABLE public.profiles REPLICA IDENTITY FULL;
-ALTER TABLE public.leads REPLICA IDENTITY FULL;`
+ALTER TABLE public.leads REPLICA IDENTITY FULL;
+ALTER TABLE public.trusted_vendors REPLICA IDENTITY FULL;`
                   )}
                 </pre>
               </div>

@@ -190,7 +190,7 @@ export default function AdminPanel({
 
         // If Supabase is configured, sync to Supabase as well
         if (isSupabaseConfigured) {
-          const tvData = {
+          const fullTvData = {
             id: savedTv.id,
             vendor_name: savedTv.vendor_name,
             logo_url: savedTv.logo_url,
@@ -201,11 +201,30 @@ export default function AdminPanel({
             updated_at: savedTv.updated_at || new Date().toISOString()
           };
 
-          const { error } = await supabase.from("trusted_vendors").upsert([tvData]);
+          // Try with full payload
+          let { error } = await supabase.from("trusted_vendors").upsert([fullTvData]);
+          
           if (error) {
-            console.error("Supabase trusted_vendors sync error:", error);
+            console.warn("Supabase trusted_vendors sync with full fields failed. Retrying with core fields only...", error);
+            
+            // Core fields only
+            const coreTvData = {
+              id: savedTv.id,
+              vendor_name: savedTv.vendor_name,
+              logo_url: savedTv.logo_url,
+              website_url: savedTv.website_url || null,
+              display_order: savedTv.display_order || 0,
+              is_active: savedTv.is_active !== false
+            };
+            
+            const retryRes = await supabase.from("trusted_vendors").upsert([coreTvData]);
+            if (retryRes.error) {
+              console.error("Supabase trusted_vendors sync retry with core fields also failed:", retryRes.error);
+            } else {
+              console.log("Successfully synced trusted vendor to Supabase using core fields fallback!");
+            }
           } else {
-            console.log("Successfully synced trusted vendor to Supabase!");
+            console.log("Successfully synced trusted vendor to Supabase with full fields!");
           }
         }
 
@@ -3129,6 +3148,50 @@ export default function AdminPanel({
                     onChange={(e) => setTvForm({ ...tvForm, logo_url: e.target.value })}
                     className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-[#0066FF]"
                   />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block uppercase text-[10px] tracking-wider text-slate-500">Upload Logo File (JPEG, PNG)</label>
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingTvLogo(true);
+                    }}
+                    onDragLeave={() => setIsDraggingTvLogo(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingTvLogo(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        handleTvLogoProcess(e.dataTransfer.files[0]);
+                      }
+                    }}
+                    onClick={() => {
+                      document.getElementById("tv-logo-file-input")?.click();
+                    }}
+                    className={`border-2 border-dashed rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-all min-h-[42px] ${
+                      isDraggingTvLogo 
+                        ? "border-[#0066FF] bg-blue-50/40" 
+                        : "border-slate-200 bg-white hover:border-[#0066FF]/60 hover:bg-slate-50/50"
+                    }`}
+                  >
+                    <input 
+                      type="file"
+                      id="tv-logo-file-input"
+                      accept="image/jpeg, image/png, image/jpg"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleTvLogoProcess(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <UploadCloud className={`w-4 h-4 transition-colors ${isDraggingTvLogo ? "text-[#0066FF]" : "text-slate-400"}`} />
+                      <p className="font-bold text-slate-700 text-[10px]">
+                        {isDraggingTvLogo ? "Drop it!" : "Drag & drop file or browse"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">

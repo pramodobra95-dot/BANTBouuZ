@@ -6,11 +6,27 @@ import { safeAlert } from "../utils/safeAlert";
 interface BlogsViewProps {
   blogs: Blog[];
   onLikeBlog?: (blogId: string) => void;
+  selectedBlog?: Blog | null;
+  onSelectBlog?: (blog: Blog | null) => void;
 }
 
-export default function BlogsView({ blogs, onLikeBlog }: BlogsViewProps) {
-  const [selectedBlog, setSelectedBlog] = useState<Blog | null>(null);
+export default function BlogsView({
+  blogs,
+  onLikeBlog,
+  selectedBlog: propSelectedBlog,
+  onSelectBlog: propOnSelectBlog
+}: BlogsViewProps) {
+  const [localSelectedBlog, setLocalSelectedBlog] = useState<Blog | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const selectedBlog = propSelectedBlog !== undefined ? propSelectedBlog : localSelectedBlog;
+  const setSelectedBlog = (blog: Blog | null) => {
+    if (propOnSelectBlog) {
+      propOnSelectBlog(blog);
+    } else {
+      setLocalSelectedBlog(blog);
+    }
+  };
 
   // Real-time SEO head meta tag injection
   React.useEffect(() => {

@@ -3290,6 +3290,37 @@ app.post("/api/settings", (req, res) => {
   res.json(db.settings);
 });
 
+// Helper to perform robust Gemini API generation with model fallbacks (resolves 503 errors on high demand)
+async function generateContentWithFallback(ai: any, params: any) {
+  const modelsToTry = [
+    params.model || "gemini-3.5-flash",
+    "gemini-flash-latest",
+    "gemini-3.1-flash-lite"
+  ];
+  
+  let lastError: any = null;
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const modelName = modelsToTry[i];
+    try {
+      console.log(`[Gemini] Attempting generation with model: ${modelName}`);
+      const callParams = { ...params, model: modelName };
+      const response = await ai.models.generateContent(callParams);
+      if (response && response.text) {
+        console.log(`[Gemini] Successfully generated response using model: ${modelName}`);
+        return response;
+      }
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[Gemini] Model ${modelName} failed. Error:`, err.message || err);
+      // Wait a short moment before trying the next fallback if this isn't the last option
+      if (i < modelsToTry.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, i === 0 ? 300 : 600));
+      }
+    }
+  }
+  throw lastError || new Error("All fallback Gemini models failed.");
+}
+
 // AI Business Consultant Endpoint (Secure server-side Gemini call)
 app.post("/api/consult", async (req, res) => {
   const { message, chatHistory } = req.body;
@@ -3344,7 +3375,7 @@ Respond to the user professionally as a high-caliber B2B IT Consultant. Suggest 
       parts: [{ text: message }]
     });
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithFallback(ai, {
       model: "gemini-3.5-flash",
       contents,
       config: {
@@ -3401,7 +3432,7 @@ The output MUST be a strict JSON object following the requested schema. Ensure t
 - SEO Keyword / Focus Keyword: ${seoKeyword || topic}
 - Call to Action: ${cta || "Visit BANTConfirm to match with verified suppliers"}`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithFallback(ai, {
       model: "gemini-3.5-flash",
       contents: userPrompt,
       config: {
@@ -3520,7 +3551,7 @@ app.post("/api/gemini/improve-blog", async (req, res) => {
       userPrompt += `\n\nAdditional client instructions: ${additionalInstructions}`;
     }
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithFallback(ai, {
       model: "gemini-3.5-flash",
       contents: userPrompt,
       config: {
@@ -3902,7 +3933,40 @@ function getSEOPageHtml(reqPath: string, baseHtml: string) {
   let p = reqPath.toLowerCase().replace(/\/$/, "");
   if (p === "") p = "/";
 
-  const config = seoConfig[p] || seoConfig["/"];
+  let config = seoConfig[p];
+
+  if (!config && p.startsWith("/products/")) {
+    const slug = p.substring("/products/".length);
+    const matched = db.products.find(prod => prod.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slug || prod.id === slug);
+    if (matched) {
+      config = {
+        title: `${matched.name} Specs, Pricing & BANT Verification | BANTConfirm`,
+        description: `Compare detailed technical specs, customer reviews, and direct vendor pricing for ${matched.name} under category ${matched.category}. Verify decision authority and matching budget constraints.`,
+        canonical: `https://www.bantconfirm.com/products/${slug}`,
+        h1: matched.name,
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": matched.name,
+          "description": matched.description,
+          "image": matched.images?.[0] || "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&auto=format&fit=crop",
+          "brand": {
+            "@type": "Brand",
+            "name": matched.vendorName
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": matched.pricing ? matched.pricing.replace(/[^0-9]/g, "") || "45000" : "45000",
+            "priceCurrency": "INR"
+          }
+        }
+      };
+    }
+  }
+
+  if (!config) {
+    config = seoConfig["/"];
+  }
 
   const titleTag = `<title>${config.title}</title>`;
   const metaTags = `
@@ -3935,69 +3999,61 @@ async function startServer() {
   // Serve dynamic Sitemap
   app.get("/sitemap.xml", (req, res) => {
     res.header("Content-Type", "application/xml");
+    
+    const staticUrls = [
+      { loc: "https://www.bantconfirm.com/", changefreq: "daily", priority: "1.0" },
+      { loc: "https://www.bantconfirm.com/about", changefreq: "weekly", priority: "0.8" },
+      { loc: "https://www.bantconfirm.com/contact", changefreq: "weekly", priority: "0.8" },
+      { loc: "https://www.bantconfirm.com/services", changefreq: "weekly", priority: "0.8" },
+      { loc: "https://www.bantconfirm.com/vendors", changefreq: "daily", priority: "0.9" },
+      { loc: "https://www.bantconfirm.com/categories", changefreq: "daily", priority: "0.9" },
+      { loc: "https://www.bantconfirm.com/blog", changefreq: "daily", priority: "0.8" },
+      { loc: "https://www.bantconfirm.com/privacy-policy", changefreq: "monthly", priority: "0.5" },
+      { loc: "https://www.bantconfirm.com/terms-and-conditions", changefreq: "monthly", priority: "0.5" },
+      { loc: "https://www.bantconfirm.com/become-partner", changefreq: "weekly", priority: "0.8" }
+    ];
+
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    let urlsXml = staticUrls.map(url => `
+  <url>
+    <loc>${url.loc}</loc>
+    <lastmod>${todayStr}</lastmod>
+    <changefreq>${url.changefreq}</changefreq>
+    <priority>${url.priority}</priority>
+  </url>`).join("");
+
+    // Add active products from the local/Postgres database
+    if (db.products && Array.isArray(db.products)) {
+      db.products.filter(p => p.approved).forEach(p => {
+        const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        urlsXml += `
+  <url>
+    <loc>https://www.bantconfirm.com/products/${slug}</loc>
+    <lastmod>${todayStr}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>`;
+      });
+    }
+
+    // Add blog posts
+    if (db.blogs && Array.isArray(db.blogs)) {
+      db.blogs.forEach(b => {
+        urlsXml += `
+  <url>
+    <loc>https://www.bantconfirm.com/blog/${b.slug || b.id}</loc>
+    <lastmod>${todayStr}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>`;
+      });
+    }
+
     const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://www.bantconfirm.com/</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/about</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/contact</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/services</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/vendors</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/categories</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/blog</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/privacy-policy</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/terms-and-conditions</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://www.bantconfirm.com/become-partner</loc>
-    <lastmod>2026-06-29</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urlsXml}
 </urlset>`;
+
     res.send(sitemapXml);
   });
 
