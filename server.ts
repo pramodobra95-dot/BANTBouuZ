@@ -2344,7 +2344,7 @@ app.post("/api/products", (req, res) => {
     vendorId: prod.vendorId || "ven-1",
     vendorName: prod.vendorName || "SaaSify Solutions Pvt Ltd",
     isFeatured: !!prod.isFeatured,
-    approved: prod.approved !== undefined ? !!prod.approved : false, // Default requires admin approval
+    approved: prod.approved !== undefined ? !!prod.approved : true, // Default to true so newly added products immediately show up on dashboard
     views: 0,
     createdAt: new Date().toISOString()
   };

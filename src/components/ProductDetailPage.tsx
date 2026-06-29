@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { 
   ArrowLeft, Check, Shield, Star, Award, Share2, 
   HelpCircle, FileText, Send, Sparkles, Mail, Phone, 
@@ -20,8 +20,12 @@ export default function ProductDetailPage({
   onPostLead, 
   currentUser 
 }: ProductDetailPageProps) {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug: paramSlug } = useParams<{ slug: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
+
+  const slug = decodeURIComponent(paramSlug || location.pathname.split("/products/")[1]?.replace(/\/$/, "") || "");
+  const slugLower = slug.toLowerCase();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +57,7 @@ export default function ProductDetailPage({
       try {
         // Try finding locally first
         const matchedLocal = initialProducts.find(
-          p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slug || p.id === slug
+          p => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slugLower || p.id.toLowerCase() === slugLower
         );
 
         if (matchedLocal) {
@@ -78,7 +82,7 @@ export default function ProductDetailPage({
 
           if (!error && data) {
             const matchedDb = data.find(
-              (p: any) => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slug || p.id === slug
+              (p: any) => p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slugLower || p.id.toLowerCase() === slugLower
             );
             if (matchedDb) {
               // Convert schema format if necessary
