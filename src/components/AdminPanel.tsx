@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { Vendor, Product, Lead, Blog, Banner, Category } from "../types";
 import { safeAlert } from "../utils/safeAlert";
+import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 
 interface AdminPanelProps {
   vendors: Vendor[];
@@ -40,6 +41,7 @@ interface AdminPanelProps {
   onDeleteUser?: (userId: string) => void;
   onAddCategory?: (catData: { name: string; description: string; icon: string }) => void;
   onDeleteCategory?: (categoryId: string) => void;
+  onRefreshData?: () => void;
 }
 
 export default function AdminPanel({
@@ -70,9 +72,180 @@ export default function AdminPanel({
   registeredUsers = [],
   onDeleteUser,
   onAddCategory,
-  onDeleteCategory
+  onDeleteCategory,
+  onRefreshData
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'vendors' | 'products' | 'leads' | 'banners' | 'blogs' | 'cms' | 'users' | 'categories'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'vendors' | 'products' | 'leads' | 'banners' | 'blogs' | 'cms' | 'users' | 'categories' | 'trusted-vendors'>('overview');
+
+  // Trusted Vendors administration state
+  const [trustedVendors, setTrustedVendors] = useState<any[]>([]);
+  const [loadingTv, setLoadingTv] = useState(false);
+  const [showTvForm, setShowTvForm] = useState(false);
+  const [editingTv, setEditingTv] = useState<any | null>(null);
+  const [tvForm, setTvForm] = useState({
+    vendor_name: "",
+    logo_url: "",
+    website_url: "",
+    display_order: 0,
+    is_active: true
+  });
+
+  const [isDraggingTvLogo, setIsDraggingTvLogo] = useState(false);
+
+  const handleTvLogoProcess = (file: File) => {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/jpg"].includes(file.type)) {
+      safeAlert("Invalid file format. Please upload a JPEG or PNG image.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result;
+      if (typeof result === "string") {
+        setTvForm(prev => ({
+          ...prev,
+          logo_url: result
+        }));
+        safeAlert("Logo image uploaded successfully!");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const fetchTrustedVendors = async () => {
+    setLoadingTv(true);
+    try {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase.from("trusted_vendors").select("*").order("display_order", { ascending: true });
+        if (!error && data) {
+          setTrustedVendors(data);
+          setLoadingTv(false);
+          return;
+        }
+      }
+
+      const res = await fetch("/api/admin/trusted-vendors");
+      if (res.ok) {
+        const data = await res.json();
+        setTrustedVendors(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch trusted vendors in AdminPanel:", e);
+    } finally {
+      setLoadingTv(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "trusted-vendors") {
+      fetchTrustedVendors();
+    }
+  }, [activeTab]);
+
+  const handleOpenAddTv = () => {
+    setEditingTv(null);
+    setTvForm({
+      vendor_name: "",
+      logo_url: "",
+      website_url: "",
+      display_order: trustedVendors.length + 1,
+      is_active: true
+    });
+    setShowTvForm(true);
+  };
+
+  const handleOpenEditTv = (tv: any) => {
+    setEditingTv(tv);
+    setTvForm({
+      vendor_name: tv.vendor_name,
+      logo_url: tv.logo_url,
+      website_url: tv.website_url || "",
+      display_order: tv.display_order || 0,
+      is_active: tv.is_active !== false
+    });
+    setShowTvForm(true);
+  };
+
+  const handleSaveTv = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tvForm.vendor_name || !tvForm.logo_url) {
+      safeAlert("Vendor Name and Logo URL are required");
+      return;
+    }
+
+    try {
+      const url = editingTv 
+        ? `/api/admin/trusted-vendors/${editingTv.id}`
+        : "/api/admin/trusted-vendors";
+      const method = editingTv ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tvForm)
+      });
+
+      if (res.ok) {
+        const savedTv = await res.json();
+
+        // If Supabase is configured, sync to Supabase as well
+        if (isSupabaseConfigured) {
+          const tvData = {
+            id: savedTv.id,
+            vendor_name: savedTv.vendor_name,
+            logo_url: savedTv.logo_url,
+            website_url: savedTv.website_url || null,
+            display_order: savedTv.display_order || 0,
+            is_active: savedTv.is_active !== false,
+            created_at: savedTv.created_at || new Date().toISOString(),
+            updated_at: savedTv.updated_at || new Date().toISOString()
+          };
+
+          const { error } = await supabase.from("trusted_vendors").upsert([tvData]);
+          if (error) {
+            console.error("Supabase trusted_vendors sync error:", error);
+          } else {
+            console.log("Successfully synced trusted vendor to Supabase!");
+          }
+        }
+
+        setShowTvForm(false);
+        fetchTrustedVendors();
+        if (onRefreshData) onRefreshData();
+      } else {
+        const err = await res.json();
+        safeAlert(`Error: ${err.error || "failed to save"}`);
+      }
+    } catch (err) {
+      console.error(err);
+      safeAlert("An unexpected error occurred while saving.");
+    }
+  };
+
+  const handleDeleteTv = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this trusted vendor?")) return;
+    try {
+      const res = await fetch(`/api/admin/trusted-vendors/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        // If Supabase is configured, delete from Supabase as well
+        if (isSupabaseConfigured) {
+          const { error } = await supabase.from("trusted_vendors").delete().eq("id", id);
+          if (error) {
+            console.error("Supabase trusted_vendors delete error:", error);
+          } else {
+            console.log("Successfully deleted trusted vendor from Supabase!");
+          }
+        }
+
+        fetchTrustedVendors();
+        if (onRefreshData) onRefreshData();
+      } else {
+        safeAlert("Failed to delete trusted vendor.");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // Product addition and editing form state
   const [showProductForm, setShowProductForm] = useState(false);
@@ -578,7 +751,19 @@ export default function AdminPanel({
           <p className="text-xs text-slate-500 mt-1">Global Marketplace Audit & Lead routing controls.</p>
         </div>
 
-        <div className="flex bg-slate-100 p-1 rounded-lg self-start text-xs font-semibold overflow-x-auto scrollbar-none">
+        <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto md:ml-auto md:self-center text-xs font-semibold overflow-x-auto flex-nowrap scrollbar-thin admin-tabs-scrollbar gap-1">
+          <style dangerouslySetInnerHTML={{ __html: `
+            .admin-tabs-scrollbar::-webkit-scrollbar {
+              height: 4px;
+            }
+            .admin-tabs-scrollbar::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            .admin-tabs-scrollbar::-webkit-scrollbar-thumb {
+              background-color: #cbd5e1;
+              border-radius: 2px;
+            }
+          `}} />
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-3 py-2 rounded-md cursor-pointer transition-all shrink-0 ${
@@ -650,6 +835,14 @@ export default function AdminPanel({
             }`}
           >
             Categories ({categories.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('trusted-vendors')}
+            className={`px-3 py-2 rounded-md cursor-pointer transition-all shrink-0 ${
+              activeTab === 'trusted-vendors' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Trusted Vendors ({trustedVendors.length})
           </button>
         </div>
       </div>
@@ -2875,6 +3068,244 @@ export default function AdminPanel({
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. TRUSTED VENDORS MANAGEMENT TAB */}
+      {activeTab === 'trusted-vendors' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4 border-slate-100">
+            <div>
+              <h3 className="text-base font-black text-slate-800">Trusted Vendors Showcase Management</h3>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                Add, edit, and organize system integrator and OEM logos displayed in the orbital carousel on ClientConfirm.com homepage.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddTv}
+              className="bg-[#0066FF] hover:bg-[#0055DD] text-white text-xs font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Add Vendor Logo
+            </button>
+          </div>
+
+          {/* Form Modal / Panel */}
+          {showTvForm && (
+            <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-6 shadow-sm space-y-4 max-w-2xl mx-auto transition-all animate-fade-in">
+              <div className="flex items-center justify-between border-b pb-3 border-slate-200">
+                <h4 className="font-bold text-sm text-slate-800">
+                  {editingTv ? "Edit Trusted Vendor Logo" : "Add New Trusted Vendor Logo"}
+                </h4>
+                <button
+                  onClick={() => setShowTvForm(false)}
+                  className="text-slate-400 hover:text-slate-600 font-black text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveTv} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold text-slate-600">
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="block uppercase text-[10px] tracking-wider text-slate-500">Vendor Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Cisco Systems, Microsoft BANT Partner"
+                    value={tvForm.vendor_name}
+                    onChange={(e) => setTvForm({ ...tvForm, vendor_name: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-[#0066FF]"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block uppercase text-[10px] tracking-wider text-slate-500">Logo Image URL *</label>
+                  <input
+                    type="url"
+                    required
+                    placeholder="https://example.com/logo.png"
+                    value={tvForm.logo_url}
+                    onChange={(e) => setTvForm({ ...tvForm, logo_url: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-[#0066FF]"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block uppercase text-[10px] tracking-wider text-slate-500">Logo Live Preview</label>
+                  <div className="h-[42px] flex items-center gap-3 bg-white border border-slate-200 rounded-lg px-3">
+                    {tvForm.logo_url ? (
+                      <img
+                        src={tvForm.logo_url}
+                        alt="Preview"
+                        className="h-7 w-auto object-contain max-w-[120px]"
+                        onError={(e) => {
+                          e.currentTarget.src = "https://placehold.co/120x40/f1f5f9/94a3b8?text=Broken+Link";
+                        }}
+                      />
+                    ) : (
+                      <span className="text-[11px] text-slate-400">Waiting for logo url...</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block uppercase text-[10px] tracking-wider text-slate-500">Website URL (Optional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://www.cisco.com"
+                    value={tvForm.website_url}
+                    onChange={(e) => setTvForm({ ...tvForm, website_url: e.target.value })}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-[#0066FF]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block uppercase text-[10px] tracking-wider text-slate-500">Display Order</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={tvForm.display_order}
+                      onChange={(e) => setTvForm({ ...tvForm, display_order: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-[#0066FF]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block uppercase text-[10px] tracking-wider text-slate-500">Status</label>
+                    <select
+                      value={tvForm.is_active ? "true" : "false"}
+                      onChange={(e) => setTvForm({ ...tvForm, is_active: e.target.value === "true" })}
+                      className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-[#0066FF]"
+                    >
+                      <option value="true">Active (Showcase on Home)</option>
+                      <option value="false">Inactive (Hidden)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 pt-4 flex justify-end gap-3 border-t mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowTvForm(false)}
+                    className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 px-5 rounded-lg cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-[#0066FF] hover:bg-[#0055DD] text-white font-bold py-2.5 px-5 rounded-lg flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    <CheckSquare className="w-4 h-4" /> Save Vendor Config
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Table Container */}
+          <div className="bg-white border rounded-2xl shadow-xs overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b flex items-center justify-between text-xs font-bold text-slate-500 uppercase">
+              <span>Verified Logos Directory ({trustedVendors.length})</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-xs font-semibold text-slate-600">
+                <thead>
+                  <tr className="bg-slate-50/50 text-slate-400 text-[10px] uppercase border-b">
+                    <th className="p-4 font-bold">Logo</th>
+                    <th className="p-4 font-bold">Vendor Name</th>
+                    <th className="p-4 font-bold">Website Destination</th>
+                    <th className="p-4 font-bold text-center">Display Order</th>
+                    <th className="p-4 font-bold">Status</th>
+                    <th className="p-4 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loadingTv ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">
+                        <span className="animate-pulse">Loading verified vendor showcase directory...</span>
+                      </td>
+                    </tr>
+                  ) : trustedVendors.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">
+                        No trusted vendors currently defined. Click "Add Vendor Logo" to bootstrap the directory.
+                      </td>
+                    </tr>
+                  ) : (
+                    trustedVendors.map((tv) => (
+                      <tr key={tv.id} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="p-4">
+                          <div className="w-20 h-10 bg-slate-50 border border-slate-100 rounded-lg p-1.5 flex items-center justify-center">
+                            <img
+                              src={tv.logo_url}
+                              alt={tv.vendor_name}
+                              className="max-h-full max-w-full object-contain filter"
+                              onError={(e) => {
+                                e.currentTarget.src = "https://placehold.co/120x40/f1f5f9/94a3b8?text=No+Logo";
+                              }}
+                            />
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-bold text-slate-800 text-sm">{tv.vendor_name}</p>
+                          <p className="text-[9px] text-slate-400 font-mono select-all mt-0.5">TV_ID: {tv.id}</p>
+                        </td>
+                        <td className="p-4">
+                          {tv.website_url ? (
+                            <a
+                              href={tv.website_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                            >
+                              <span>{tv.website_url}</span>
+                              <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 italic">None provided</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-mono font-bold border">
+                            {tv.display_order}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          {tv.is_active !== false ? (
+                            <span className="bg-emerald-50 text-emerald-700 text-[10px] px-2.5 py-1 rounded-full border border-emerald-200">
+                              Active (In Loop)
+                            </span>
+                          ) : (
+                            <span className="bg-slate-50 text-slate-400 text-[10px] px-2.5 py-1 rounded-full border">
+                              Inactive (Hidden)
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right space-x-1">
+                          <button
+                            onClick={() => handleOpenEditTv(tv)}
+                            className="text-blue-600 hover:text-blue-900 p-1.5 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="Edit"
+                          >
+                            <Pencil className="w-4 h-4 inline" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTv(tv.id)}
+                            className="text-rose-600 hover:text-rose-900 p-1.5 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

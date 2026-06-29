@@ -7,7 +7,7 @@ import {
   User, MapPin, Sparkles, Globe, TrendingUp, Gauge, Eye, BookOpen, ThumbsUp, Code, Copy,
   Info, Settings
 } from "lucide-react";
-import { Category, Product, Vendor, Blog, Banner, Testimonial } from "../types";
+import { Category, Product, Vendor, Blog, Banner, Testimonial, TrustedVendor } from "../types";
 import { safeAlert } from "../utils/safeAlert";
 
 interface HomeViewProps {
@@ -16,6 +16,7 @@ interface HomeViewProps {
   categories: Category[];
   products: Product[];
   vendors: Vendor[];
+  trustedVendors?: TrustedVendor[];
   blogs: Blog[];
   banners: Banner[];
   testimonials: Testimonial[];
@@ -80,6 +81,7 @@ export default function HomeView({
   categories,
   products,
   vendors,
+  trustedVendors = [],
   blogs,
   banners,
   testimonials,
@@ -91,6 +93,7 @@ export default function HomeView({
 }: HomeViewProps) {
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
+  const [isOrbitPaused, setIsOrbitPaused] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -814,6 +817,197 @@ export default function HomeView({
                 System integrators register with corporate PAN, GST registry credentials, and previous client deployment catalogs verified manually by BANTConfirm.
               </p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* TRUSTED VENDORS LOGO SHOWCASE */}
+      <div className="max-w-7xl mx-auto px-6 py-12 relative overflow-hidden">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes orbit-rotate-clockwise {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          @keyframes orbit-counter-clockwise {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(-360deg); }
+          }
+          @keyframes glow-pulse {
+            0%, 100% { opacity: 0.15; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(1.1); }
+          }
+          @keyframes float-ambient {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-6px) rotate(1deg); }
+          }
+          @keyframes ticker-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+          }
+          .animate-orbit-galaxy {
+            animation: orbit-rotate-clockwise 55s linear infinite;
+          }
+          .animate-counter-orbit-galaxy {
+            animation: orbit-counter-clockwise 55s linear infinite;
+          }
+          .animate-glow-pulse {
+            animation: glow-pulse 8s ease-in-out infinite;
+          }
+          .animate-float-ambient-1 {
+            animation: float-ambient 6s ease-in-out infinite;
+          }
+          .animate-float-ambient-2 {
+            animation: float-ambient 8s ease-in-out infinite 1s;
+          }
+          .animate-ticker {
+            animation: ticker-scroll 35s linear infinite;
+          }
+          .animation-paused-all, .animation-paused-all * {
+            animation-play-state: paused !important;
+          }
+          .ticker-container:hover .animate-ticker {
+            animation-play-state: paused !important;
+          }
+        `}} />
+
+        <div className="bg-gradient-to-br from-[#0c1e4d] via-[#102d73] to-[#040e26] rounded-3xl p-6 md:p-12 border border-slate-700/50 shadow-2xl relative overflow-hidden min-h-[480px] flex flex-col justify-between">
+          {/* Animated Background Glow Elements */}
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl animate-glow-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-yellow-500/5 blur-3xl animate-glow-pulse" style={{ animationDelay: "2s" }}></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-blue-600/5 blur-3xl animate-glow-pulse" style={{ animationDelay: "4s" }}></div>
+
+          {/* Heading */}
+          <div className="text-center z-10 max-w-2xl mx-auto space-y-3 relative mb-6">
+            <span className="text-yellow-400 font-bold text-xs uppercase tracking-wider block animate-pulse">
+              Verified Enterprise Sourcing
+            </span>
+            <h3 className="text-2xl md:text-4xl font-black text-white tracking-tight leading-tight">
+              Trusted by Leading Technology Partners
+            </h3>
+            <p className="text-xs md:text-sm text-slate-300">
+              Trusted enterprise vendors delivering secure, scalable, and reliable business solutions.
+            </p>
+          </div>
+
+          {/* DESKTOP/TABLET ORBITAL GALAXY VIEW (lg:block) */}
+          <div className="hidden lg:block relative w-full h-[360px] my-4 overflow-visible">
+            {/* Center Focus Text with subtle styling */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center z-10 w-[240px] pointer-events-none p-4 rounded-full bg-[#102d73]/40 backdrop-blur-md border border-white/5 shadow-inner">
+              <span className="text-yellow-400 font-black text-sm block">BANTConfirm</span>
+              <span className="text-[10px] text-slate-300 uppercase tracking-widest font-semibold mt-0.5 block">Verified Network</span>
+            </div>
+
+            {/* Orbit Container with state controlled play-state */}
+            <div 
+              className={`absolute inset-0 w-full h-full animate-orbit-galaxy overflow-visible ${
+                trustedVendors.length > 0 ? "" : "pointer-events-none"
+              } ${isOrbitPaused ? "animation-paused-all" : ""}`}
+              onMouseEnter={() => setIsOrbitPaused(true)}
+              onMouseLeave={() => setIsOrbitPaused(false)}
+            >
+              {trustedVendors.map((vendor, idx) => {
+                const total = trustedVendors.length;
+                const angle = (2 * Math.PI * idx) / total;
+                const rx = 440; // Horizontal orbit radius
+                const ry = 140; // Vertical orbit radius
+                const x = Math.cos(angle) * rx;
+                const y = Math.sin(angle) * ry;
+
+                return (
+                  <div
+                    key={vendor.id}
+                    className="absolute overflow-visible"
+                    style={{
+                      left: `calc(50% + ${x}px - 48px)`,
+                      top: `calc(50% + ${y}px - 48px)`,
+                      width: "96px",
+                      height: "96px",
+                    }}
+                  >
+                    {/* Counter-rotating element to keep logo upright */}
+                    <div className="w-full h-full animate-counter-orbit-galaxy overflow-visible">
+                      <motion.div
+                        className="relative group w-full h-full flex items-center justify-center bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 hover:border-yellow-400/50 rounded-2xl p-3 shadow-lg hover:shadow-yellow-500/20 transition-all duration-300 cursor-pointer pointer-events-auto"
+                        whileHover={{ scale: 1.22, y: -4 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                      >
+                        <a 
+                          href={vendor.website_url || "#"} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="w-full h-full flex items-center justify-center"
+                        >
+                          <img
+                            src={vendor.logo_url}
+                            alt={`${vendor.vendor_name} Logo`}
+                            loading="lazy"
+                            className="max-w-full max-h-full object-contain filter brightness-100 hover:brightness-110 drop-shadow-md transition-all"
+                          />
+                        </a>
+
+                        {/* Beautiful Tooltip */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-slate-900/95 backdrop-blur-md border border-slate-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 flex items-center gap-1.5">
+                          <span>{vendor.vendor_name}</span>
+                          {vendor.website_url && <ExternalLink className="w-3 h-3 text-yellow-400" />}
+                        </div>
+                      </motion.div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* MOBILE/TABLET INFINITE TICKER VIEW (lg:hidden) */}
+          <div className="lg:hidden w-full py-4 mt-4 overflow-hidden relative">
+            <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-[#0c1e4d] to-transparent z-10 pointer-events-none"></div>
+            <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-[#0c1e4d] to-transparent z-10 pointer-events-none"></div>
+            
+            <div className="ticker-container flex w-full overflow-hidden whitespace-nowrap">
+              <div className="animate-ticker flex items-center gap-6 py-2 overflow-visible">
+                {/* Render list twice for seamless loop */}
+                {[...trustedVendors, ...trustedVendors].map((vendor, idx) => (
+                  <motion.div
+                    key={`${vendor.id}-${idx}`}
+                    className="relative group shrink-0 w-28 h-20 flex items-center justify-center bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 hover:border-yellow-400/40 rounded-xl p-3 shadow-md cursor-pointer overflow-visible"
+                    whileHover={{ scale: 1.15 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                  >
+                    <a 
+                      href={vendor.website_url || "#"} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="w-full h-full flex items-center justify-center"
+                    >
+                      <img
+                        src={vendor.logo_url}
+                        alt={`${vendor.vendor_name} Logo`}
+                        loading="lazy"
+                        className="max-w-full max-h-full object-contain filter"
+                      />
+                    </a>
+
+                    {/* Mobile/Tablet Tooltip */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50">
+                      {vendor.vendor_name}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer stats badge */}
+          <div className="z-10 text-center text-[10px] text-slate-400/80 mt-6 pt-4 border-t border-slate-800/60 flex flex-col md:flex-row items-center justify-center gap-4">
+            <span className="flex items-center gap-1">
+              <Shield className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400/15" />
+              100% Verified System Integrators & OEMs
+            </span>
+            <span className="hidden md:inline text-slate-600">|</span>
+            <span className="flex items-center gap-1">
+              <Zap className="w-3.5 h-3.5 text-yellow-400" />
+              Automated API caching for &lt; 50ms instant loading
+            </span>
           </div>
         </div>
       </div>

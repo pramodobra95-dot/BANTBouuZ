@@ -20,7 +20,7 @@ import { safeAlert } from "./utils/safeAlert";
 import { supabase, isSupabaseConfigured } from "./lib/supabaseClient";
 
 import { 
-  Category, Product, Vendor, Lead, Blog, Banner, Testimonial, Notification 
+  Category, Product, Vendor, Lead, Blog, Banner, Testimonial, Notification, TrustedVendor 
 } from "./types";
 
 function OAuthCallbackHandler() {
@@ -524,6 +524,7 @@ export default function App() {
   const [blogs, setBlogs] = useState<Blog[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [trustedVendors, setTrustedVendors] = useState<TrustedVendor[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [cmsPages, setCmsPages] = useState<Record<string, string>>({});
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
@@ -548,6 +549,7 @@ export default function App() {
       let resBlogs: any[] = [];
       let resBanners: any[] = [];
       let resTestimonials: any[] = [];
+      let resTrustedVendors: any[] = [];
       let resNotifications: any[] = [];
       let resSettings: Record<string, string> = {};
       let resUser: any = null;
@@ -557,7 +559,7 @@ export default function App() {
         const [
           catsRes, prodsRes, vendorsRes, leadsRes,
           blogsRes, bannersRes, testimonialsRes, notificationsRes,
-          settingsRes, authRes
+          settingsRes, authRes, trustedVendorsRes
         ] = await Promise.all([
           supabase.from("categories").select("*"),
           supabase.from("products").select("*"),
@@ -568,7 +570,8 @@ export default function App() {
           supabase.from("testimonials").select("*"),
           supabase.from("notifications").select("*"),
           supabase.from("settings").select("*"),
-          supabase.auth.getUser()
+          supabase.auth.getUser(),
+          supabase.from("trusted_vendors").select("*")
         ]);
 
         if (catsRes.error) console.error("[Supabase Error] categories:", catsRes.error);
@@ -788,6 +791,41 @@ export default function App() {
           }
         });
 
+        // Resilient dual-source fetching for trusted_vendors
+        let localTrustedVendors: any[] = [];
+        try {
+          const localTvRes = await fetch("/api/trusted-vendors");
+          if (localTvRes.ok) {
+            localTrustedVendors = await localTvRes.json();
+          }
+        } catch (err) {
+          console.warn("Could not query trusted vendors from local server:", err);
+        }
+        let supabaseTrustedVendors = [];
+        if (trustedVendorsRes && !trustedVendorsRes.error) {
+          supabaseTrustedVendors = trustedVendorsRes.data || [];
+        } else if (trustedVendorsRes?.error) {
+          console.warn("[Supabase Notice] trusted_vendors table query notice:", trustedVendorsRes.error);
+        }
+        const seenTv = new Set();
+        resTrustedVendors = [];
+        [...supabaseTrustedVendors, ...localTrustedVendors].forEach((tv: any) => {
+          const key = tv.id;
+          if (key && !seenTv.has(key)) {
+            seenTv.add(key);
+            resTrustedVendors.push({
+              id: tv.id,
+              vendor_name: tv.vendor_name,
+              logo_url: tv.logo_url,
+              website_url: tv.website_url,
+              display_order: typeof tv.display_order === 'number' ? tv.display_order : parseInt(tv.display_order || '0'),
+              is_active: tv.is_active !== false,
+              created_at: tv.created_at || tv.createdAt,
+              updated_at: tv.updated_at || tv.updatedAt
+            });
+          }
+        });
+
         const settingsMap: Record<string, string> = {};
         if (settingsRes.data) {
           settingsRes.data.forEach((item: any) => {
@@ -833,7 +871,7 @@ export default function App() {
         const [
           rCats, rProds, rVendors, rLeads, 
           rBlogs, rBanners, rTestimonials, 
-          rNotifications, rSettings, rUser, rUsers
+          rNotifications, rSettings, rUser, rUsers, rTrustedVendors
         ] = await Promise.all([
           safeFetchJson("/api/categories"),
           safeFetchJson("/api/products"),
@@ -845,7 +883,8 @@ export default function App() {
           safeFetchJson("/api/notifications"),
           safeFetchJson("/api/settings", {}),
           safeFetchJson("/api/auth/me", null),
-          safeFetchJson("/api/users", [])
+          safeFetchJson("/api/users", []),
+          safeFetchJson("/api/trusted-vendors")
         ]);
         resCats = rCats;
         resProds = rProds;
@@ -858,11 +897,13 @@ export default function App() {
         resSettings = rSettings;
         resUser = rUser;
         resUsers = rUsers;
+        resTrustedVendors = rTrustedVendors;
       }
 
       setCategories(Array.isArray(resCats) ? resCats : []);
       setProducts(Array.isArray(resProds) ? resProds : []);
       setVendors(Array.isArray(resVendors) ? resVendors : []);
+      setTrustedVendors(Array.isArray(resTrustedVendors) ? resTrustedVendors : []);
       setRegisteredUsers(Array.isArray(resUsers) ? resUsers : []);
       if (Array.isArray(resLeads)) {
         setLeads(resLeads.map((l: any) => ({
@@ -2363,6 +2404,7 @@ export default function App() {
                   categories={categories}
                   products={products}
                   vendors={vendors}
+                  trustedVendors={trustedVendors}
                   blogs={blogs}
                   banners={banners}
                   testimonials={testimonials}
@@ -2560,6 +2602,7 @@ export default function App() {
                   onDeleteUser={handleDeleteUser}
                   onAddCategory={handleAddCategory}
                   onDeleteCategory={handleDeleteCategory}
+                  onRefreshData={fetchAllData}
                 />
               </motion.div>
             )}

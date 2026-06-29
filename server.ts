@@ -639,6 +639,109 @@ const defaultUsers = [
   }
 ];
 
+const defaultTrustedVendors = [
+  {
+    id: "tv-1",
+    vendor_name: "Google Cloud",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg",
+    website_url: "https://cloud.google.com",
+    display_order: 1,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-2",
+    vendor_name: "Microsoft Enterprise",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo_%282012%29.svg",
+    website_url: "https://microsoft.com",
+    display_order: 2,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-3",
+    vendor_name: "Amazon Web Services",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg",
+    website_url: "https://aws.amazon.com",
+    display_order: 3,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-4",
+    vendor_name: "Salesforce CRM",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg",
+    website_url: "https://salesforce.com",
+    display_order: 4,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-5",
+    vendor_name: "Zoho Corporation",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/d/df/Zoho_logo.svg",
+    website_url: "https://zoho.com",
+    display_order: 5,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-6",
+    vendor_name: "Odoo ERP",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/b/b8/Odoo-logo.svg",
+    website_url: "https://odoo.com",
+    display_order: 6,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-7",
+    vendor_name: "SAP India",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/5/59/SAP_2011_logo.svg",
+    website_url: "https://sap.com",
+    display_order: 7,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-8",
+    vendor_name: "Twilio Communications",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/7/7e/Twilio-logo-red.svg",
+    website_url: "https://twilio.com",
+    display_order: 8,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-9",
+    vendor_name: "HubSpot",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/3/3f/HubSpot_Logo.svg",
+    website_url: "https://hubspot.com",
+    display_order: 9,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: "tv-10",
+    vendor_name: "Tally Solutions",
+    logo_url: "https://upload.wikimedia.org/wikipedia/commons/0/09/Tally_-_Logo.svg",
+    website_url: "https://tallysolutions.com",
+    display_order: 10,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+
 // Global DB Object
 let db: {
   categories: typeof defaultCategories;
@@ -653,6 +756,7 @@ let db: {
   currentUser: typeof defaultCurrentUser;
   leadAssignments: any[];
   users: any[];
+  trustedVendors: any[];
 } = {
   categories: defaultCategories,
   vendors: defaultVendors,
@@ -669,7 +773,8 @@ let db: {
     { id: "la-2", leadId: "lead-1", vendorId: "ven-2", status: "New", purchased: true, createdAt: new Date().toISOString() },
     { id: "la-3", leadId: "lead-3", vendorId: "ven-3", status: "Proposal Sent", purchased: true, createdAt: new Date().toISOString() },
   ],
-  users: defaultUsers
+  users: defaultUsers,
+  trustedVendors: defaultTrustedVendors
 };
 
 // Load Database from disk if exists
@@ -680,6 +785,9 @@ function loadDb() {
       db = JSON.parse(raw);
       if (!db.users) {
         db.users = defaultUsers;
+      }
+      if (!db.trustedVendors) {
+        db.trustedVendors = defaultTrustedVendors;
       }
       if (!db.settings) {
         db.settings = defaultSettings;
@@ -1048,6 +1156,20 @@ async function initPostgres() {
       )
     `);
 
+    // 12. Create trusted_vendors table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS trusted_vendors (
+        id VARCHAR(50) PRIMARY KEY,
+        vendor_name VARCHAR(200) NOT NULL,
+        logo_url TEXT NOT NULL,
+        website_url TEXT,
+        display_order INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        created_at VARCHAR(100),
+        updated_at VARCHAR(100)
+      )
+    `);
+
     // Ensure leads table has title and city columns
     try {
       await client.query("ALTER TABLE leads ADD COLUMN IF NOT EXISTS title VARCHAR(200)");
@@ -1080,7 +1202,8 @@ async function initPostgres() {
         "settings",
         "notifications",
         "lead_assignments",
-        "profiles"
+        "profiles",
+        "trusted_vendors"
       ];
       for (const table of rlsTables) {
         await client.query(`ALTER TABLE IF EXISTS public.${table} DISABLE ROW LEVEL SECURITY`).catch(() => {});
@@ -1175,6 +1298,19 @@ async function initPostgres() {
           `INSERT INTO testimonials (id, name, role, company, feedback, avatar)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [t.id, t.name, t.role, t.company, t.feedback, t.avatar]
+        );
+      }
+    }
+
+    // Seed trusted_vendors if empty
+    const tvCheck = await client.query("SELECT COUNT(*) FROM trusted_vendors");
+    if (parseInt(tvCheck.rows[0].count) === 0) {
+      console.log("Seeding initial trusted vendors to Postgres...");
+      for (const tv of defaultTrustedVendors) {
+        await client.query(
+          `INSERT INTO trusted_vendors (id, vendor_name, logo_url, website_url, display_order, is_active, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [tv.id, tv.vendor_name, tv.logo_url, tv.website_url, tv.display_order, tv.is_active, tv.created_at, tv.updated_at]
         );
       }
     }
@@ -2979,6 +3115,149 @@ app.delete("/api/banners/:id", (req, res) => {
 // Testimonials API
 app.get("/api/testimonials", (req, res) => {
   res.json(db.testimonials);
+});
+
+// Trusted Vendors API
+app.get("/api/trusted-vendors", async (req, res) => {
+  if (pgPool) {
+    try {
+      const q = await pgPool.query("SELECT * FROM trusted_vendors WHERE is_active = true ORDER BY display_order ASC");
+      const mapped = q.rows.map(row => ({
+        id: row.id,
+        vendor_name: row.vendor_name,
+        logo_url: row.logo_url,
+        website_url: row.website_url,
+        display_order: row.display_order,
+        is_active: row.is_active,
+        created_at: row.created_at,
+        updated_at: row.updated_at
+      }));
+      return res.json(mapped);
+    } catch (err) {
+      console.error("Failed to query trusted_vendors from PostgreSQL, falling back to local JSON:", err);
+    }
+  }
+  const filtered = db.trustedVendors
+    .filter(v => v.is_active !== false)
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+  res.json(filtered);
+});
+
+app.get("/api/admin/trusted-vendors", async (req, res) => {
+  if (pgPool) {
+    try {
+      const q = await pgPool.query("SELECT * FROM trusted_vendors ORDER BY display_order ASC");
+      const mapped = q.rows.map(row => ({
+        id: row.id,
+        vendor_name: row.vendor_name,
+        logo_url: row.logo_url,
+        website_url: row.website_url,
+        display_order: row.display_order,
+        is_active: row.is_active,
+        created_at: row.created_at,
+        updated_at: row.updated_at
+      }));
+      return res.json(mapped);
+    } catch (err) {
+      console.error("Failed to query all trusted_vendors from PostgreSQL, falling back to local JSON:", err);
+    }
+  }
+  const sorted = [...db.trustedVendors].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+  res.json(sorted);
+});
+
+app.post("/api/admin/trusted-vendors", async (req, res) => {
+  const { vendor_name, logo_url, website_url, display_order, is_active } = req.body;
+  if (!vendor_name || !logo_url) {
+    return res.status(400).json({ error: "vendor_name and logo_url are required" });
+  }
+
+  const newVendor = {
+    id: `tv-${Date.now()}`,
+    vendor_name,
+    logo_url,
+    website_url: website_url || "",
+    display_order: typeof display_order === "number" ? display_order : parseInt(display_order || "0", 10),
+    is_active: is_active !== undefined ? !!is_active : true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  db.trustedVendors.push(newVendor);
+  saveDb();
+
+  if (pgPool) {
+    try {
+      await pgPool.query(
+        `INSERT INTO trusted_vendors (id, vendor_name, logo_url, website_url, display_order, is_active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [newVendor.id, newVendor.vendor_name, newVendor.logo_url, newVendor.website_url, newVendor.display_order, newVendor.is_active, newVendor.created_at, newVendor.updated_at]
+      );
+    } catch (err) {
+      console.error("Failed to save new trusted_vendor to PostgreSQL:", err);
+    }
+  }
+
+  res.status(201).json(newVendor);
+});
+
+app.put("/api/admin/trusted-vendors/:id", async (req, res) => {
+  const { id } = req.params;
+  const { vendor_name, logo_url, website_url, display_order, is_active } = req.body;
+
+  const idx = db.trustedVendors.findIndex(v => v.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Trusted vendor not found" });
+  }
+
+  const updated = {
+    ...db.trustedVendors[idx],
+    vendor_name: vendor_name !== undefined ? vendor_name : db.trustedVendors[idx].vendor_name,
+    logo_url: logo_url !== undefined ? logo_url : db.trustedVendors[idx].logo_url,
+    website_url: website_url !== undefined ? website_url : db.trustedVendors[idx].website_url,
+    display_order: display_order !== undefined ? (typeof display_order === "number" ? display_order : parseInt(display_order || "0", 10)) : db.trustedVendors[idx].display_order,
+    is_active: is_active !== undefined ? !!is_active : db.trustedVendors[idx].is_active,
+    updated_at: new Date().toISOString()
+  };
+
+  db.trustedVendors[idx] = updated;
+  saveDb();
+
+  if (pgPool) {
+    try {
+      await pgPool.query(
+        `UPDATE trusted_vendors 
+         SET vendor_name = $1, logo_url = $2, website_url = $3, display_order = $4, is_active = $5, updated_at = $6
+         WHERE id = $7`,
+        [updated.vendor_name, updated.logo_url, updated.website_url, updated.display_order, updated.is_active, updated.updated_at, id]
+      );
+    } catch (err) {
+      console.error("Failed to update trusted_vendor in PostgreSQL:", err);
+    }
+  }
+
+  res.json(updated);
+});
+
+app.delete("/api/admin/trusted-vendors/:id", async (req, res) => {
+  const { id } = req.params;
+  const idx = db.trustedVendors.findIndex(v => v.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Trusted vendor not found" });
+  }
+
+  db.trustedVendors.splice(idx, 1);
+  saveDb();
+
+  if (pgPool) {
+    try {
+      await pgPool.query("DELETE FROM trusted_vendors WHERE id = $1", [id]);
+    } catch (err) {
+      console.error("Failed to delete trusted_vendor from PostgreSQL:", err);
+    }
+  }
+
+  res.json({ success: true });
 });
 
 // Notifications API
