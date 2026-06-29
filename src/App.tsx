@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   ShieldAlert, Settings, Eye, HelpCircle, Phone, 
@@ -155,9 +156,240 @@ export default function App() {
   if (window.location.pathname === "/auth/callback" || window.location.pathname === "/auth/callback/") {
     return <OAuthCallbackHandler />;
   }
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Current simulating role & navigation tabs
   const [currentRole, setCurrentRole] = useState<'buyer' | 'vendor' | 'admin'>('buyer');
-  const [activeTab, setActiveTab] = useState<string>('home');
+  
+  const getActiveTabFromPath = (path: string): string => {
+    const p = path.toLowerCase().replace(/\/$/, "");
+    if (p === "") return "home";
+    if (p === "/about") return "about";
+    if (p === "/contact") return "contact";
+    if (p === "/services") return "home"; // solutions
+    if (p === "/vendors") return "vendor-panel";
+    if (p === "/categories") return "home"; // solution categories are shown on home
+    if (p === "/blog" || p === "/blogs") return "blogs";
+    if (p === "/privacy-policy") return "privacy";
+    if (p === "/terms-and-conditions") return "terms";
+    if (p === "/dashboard") return "dashboard";
+    if (p === "/post") return "post";
+    if (p === "/become-partner") return "become-partner";
+    if (p === "/admin-panel") return "admin-panel";
+    return "home";
+  };
+
+  const activeTab = getActiveTabFromPath(location.pathname);
+
+  const setActiveTab = (tab: string) => {
+    if (tab === "home") navigate("/");
+    else if (tab === "about") navigate("/about");
+    else if (tab === "contact") navigate("/contact");
+    else if (tab === "vendor-panel") navigate("/vendors");
+    else if (tab === "blogs" || tab === "blog") navigate("/blog");
+    else if (tab === "privacy") navigate("/privacy-policy");
+    else if (tab === "terms") navigate("/terms-and-conditions");
+    else if (tab === "dashboard") navigate("/dashboard");
+    else if (tab === "post") navigate("/post");
+    else if (tab === "become-partner") navigate("/become-partner");
+    else if (tab === "admin-panel") navigate("/admin-panel");
+    else navigate(`/${tab}`);
+  };
+
+  // Synchronize document metadata and SEO tags dynamically on route change
+  useEffect(() => {
+    const seoMap: Record<string, { title: string; description: string; canonical: string; schema: any }> = {
+      "/": {
+        title: "BANTConfirm | India's Premium B2B Certified Sourcing Marketplace",
+        description: "India's premier B2B Enterprise IT & Software Solutions marketplace. We pre-qualify procurement requirements using strict Budget, Authority, Need, and Timeline (BANT) criteria, saving months of sourcing efforts.",
+        canonical: "https://www.bantconfirm.com/",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "BANTConfirm",
+          "url": "https://www.bantconfirm.com/"
+        }
+      },
+      "/about": {
+        title: "About BANTConfirm | India's #1 Certified B2B Sourcing Marketplace",
+        description: "Learn how BANTConfirm revolutionizes enterprise IT Sourcing in India by pre-qualifying software, IT hardware, and services procurement using strict Budget, Authority, Need, and Timeline (BANT) criteria.",
+        canonical: "https://www.bantconfirm.com/about",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "AboutPage",
+          "name": "About BANTConfirm",
+          "url": "https://www.bantconfirm.com/about"
+        }
+      },
+      "/contact": {
+        title: "Contact BANTConfirm | Support & Corporate HQ Noida",
+        description: "Contact BANTConfirm Support Desk for enterprise B2B partner registration, immediate telephone routing, corporate registry audits, or solution procurement assistance.",
+        canonical: "https://www.bantconfirm.com/contact",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "ContactPage",
+          "name": "Contact BANTConfirm",
+          "url": "https://www.bantconfirm.com/contact"
+        }
+      },
+      "/services": {
+        title: "Our Services & Enterprise IT Solutions | BANTConfirm Marketplace",
+        description: "Explore qualified solutions for CRM Software, ERP Enterprise Suites, Cloud Telephony, WhatsApp Business API Automation, and Cyber Security Audits on BANTConfirm.",
+        canonical: "https://www.bantconfirm.com/services",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "Service",
+          "name": "BANTConfirm Sourcing Services"
+        }
+      },
+      "/vendors": {
+        title: "Verified B2B Vendors & Certified Sourcing Partners | BANTConfirm",
+        description: "Meet verified BANTConfirm partner vendors across India. Access curated directories of CRM, ERP, and IT services providers who meet strict B2B delivery SLAs.",
+        canonical: "https://www.bantconfirm.com/vendors",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "SearchResultsPage",
+          "name": "Verified Vendors Directory"
+        }
+      },
+      "/categories": {
+        title: "Sourcing Categories & Industry Portals | BANTConfirm Marketplace",
+        description: "Browse top B2B software and services categories. Source verified IT products, read customer reviews, and receive multiple certified BANT quotes.",
+        canonical: "https://www.bantconfirm.com/categories",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          "name": "Sourcing Categories"
+        }
+      },
+      "/blog": {
+        title: "BANTConfirm Sourcing Blog | SME IT Procurement Sourcing Hub",
+        description: "Insights, guides, and tips on SME IT procurement. Learn how to qualify software vendors, optimize enterprise software budgets, and deploy verified BANT workflows.",
+        canonical: "https://www.bantconfirm.com/blog",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "Blog",
+          "name": "BANTConfirm Sourcing Blog"
+        }
+      },
+      "/privacy-policy": {
+        title: "Privacy Policy | BANTConfirm B2B Sourcing Portal",
+        description: "Read the Privacy Policy of BANTConfirm. Learn how we handle your company information, RfQ documents, and data security under Indian IT laws.",
+        canonical: "https://www.bantconfirm.com/privacy-policy",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": "Privacy Policy"
+        }
+      },
+      "/terms-and-conditions": {
+        title: "Terms & Conditions of Service | BANTConfirm India",
+        description: "Terms and conditions of service for using the BANTConfirm platform as a buyer, vendor, or administrator. Read our SLA, referral reward terms, and verification rules.",
+        canonical: "https://www.bantconfirm.com/terms-and-conditions",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": "Terms and Conditions"
+        }
+      },
+      "/dashboard": {
+        title: "BANT Sourcing Dashboard | BANTConfirm",
+        description: "Manage your active BANT qualified sourcing requirements, compare matched vendor bids, and track verified lead assignment milestones.",
+        canonical: "https://www.bantconfirm.com/dashboard",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": "Buyer Sourcing Dashboard"
+        }
+      },
+      "/post": {
+        title: "Post Sourcing Requirement | BANT Sourcing Desk",
+        description: "Post your enterprise IT software, hardware or services sourcing requirements. Get direct responses pre-qualified with Budget, Authority, Need, and Timeline (BANT) criteria.",
+        canonical: "https://www.bantconfirm.com/post",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": "Post Sourcing Requirement"
+        }
+      },
+      "/become-partner": {
+        title: "Become a Sourcing Partner | BANT Sourcing Hub",
+        description: "Join BANTConfirm's elite network of certified IT software and hardware vendor partners. Get high-intent pre-qualified BANT-verified leads directly in UP, Delhi NCR, Bangalore and Mumbai.",
+        canonical: "https://www.bantconfirm.com/become-partner",
+        schema: {
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "name": "Become a Partner"
+        }
+      }
+    };
+
+    let pathname = location.pathname.toLowerCase().replace(/\/$/, "");
+    if (pathname === "") pathname = "/";
+    if (pathname === "/blogs") pathname = "/blog";
+
+    const seo = seoMap[pathname] || seoMap["/"];
+
+    // Update document title
+    document.title = seo.title;
+
+    // Update or create meta description
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (!metaDesc) {
+      metaDesc = document.createElement('meta');
+      metaDesc.setAttribute('name', 'description');
+      document.head.appendChild(metaDesc);
+    }
+    metaDesc.setAttribute('content', seo.description);
+
+    // Update or create canonical link
+    let canonicalLink = document.querySelector('link[rel="canonical"]');
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalLink);
+    }
+    canonicalLink.setAttribute('href', seo.canonical);
+
+    // Update OG and Twitter tags
+    const updateOrCreateMeta = (property: string, content: string, isName = false) => {
+      const selector = isName ? `meta[name="${property}"]` : `meta[property="${property}"]`;
+      let meta = document.querySelector(selector);
+      if (!meta) {
+        meta = document.createElement('meta');
+        if (isName) meta.setAttribute('name', property);
+        else meta.setAttribute('property', property);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', content);
+    };
+
+    updateOrCreateMeta("og:title", seo.title);
+    updateOrCreateMeta("og:description", seo.description);
+    updateOrCreateMeta("og:url", seo.canonical);
+    updateOrCreateMeta("og:type", "website");
+    updateOrCreateMeta("og:image", "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&auto=format&fit=crop");
+
+    updateOrCreateMeta("twitter:card", "summary_large_image", true);
+    updateOrCreateMeta("twitter:title", seo.title, true);
+    updateOrCreateMeta("twitter:description", seo.description, true);
+    updateOrCreateMeta("twitter:url", seo.canonical, true);
+    updateOrCreateMeta("twitter:image", "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&auto=format&fit=crop", true);
+
+    // Update or create JSON-LD Structured Data script tag
+    let schemaScript = document.querySelector('script[type="application/ld+json"]');
+    if (!schemaScript) {
+      schemaScript = document.createElement('script');
+      schemaScript.setAttribute('type', 'application/ld+json');
+      document.head.appendChild(schemaScript);
+    }
+    schemaScript.textContent = JSON.stringify(seo.schema, null, 2);
+
+    // Scroll to top on route transitions
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [location.pathname]);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [prefilledCategory, setPrefilledCategory] = useState<string | undefined>(undefined);
   const [vendorInitialTab, setVendorInitialTab] = useState<'dashboard' | 'products' | 'leads' | 'plans' | 'register' | undefined>(undefined);

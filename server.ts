@@ -3732,7 +3732,336 @@ Alternatively, feel free to ask questions like:
 }
 
 // Vite integration / Static routing in production
+const seoConfig: Record<string, {
+  title: string;
+  description: string;
+  canonical: string;
+  h1: string;
+  schema: any;
+}> = {
+  "/": {
+    title: "BANTConfirm | India's Premium B2B Certified Sourcing Marketplace",
+    description: "India's premier B2B Enterprise IT & Software Solutions marketplace. We pre-qualify procurement requirements using strict Budget, Authority, Need, and Timeline (BANT) criteria, saving months of sourcing efforts.",
+    canonical: "https://www.bantconfirm.com/",
+    h1: "Verify Sourcing via Budget, Authority, Need & Timeline (BANT)",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "BANTConfirm",
+      "url": "https://www.bantconfirm.com/",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://www.bantconfirm.com/?search={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+  },
+  "/about": {
+    title: "About BANTConfirm | India's #1 Certified B2B Sourcing Marketplace",
+    description: "Learn how BANTConfirm revolutionizes enterprise IT Sourcing in India by pre-qualifying software, IT hardware, and services procurement using strict Budget, Authority, Need, and Timeline (BANT) criteria.",
+    canonical: "https://www.bantconfirm.com/about",
+    h1: "About BANTConfirm Sourcing Marketplace",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "AboutPage",
+      "name": "About BANTConfirm",
+      "description": "Learn about India's premium B2B IT sourcing platform using the BANT framework.",
+      "url": "https://www.bantconfirm.com/about"
+    }
+  },
+  "/contact": {
+    title: "Contact BANTConfirm | Support & Corporate HQ Noida",
+    description: "Contact BANTConfirm Support Desk for enterprise B2B partner registration, immediate telephone routing, corporate registry audits, or solution procurement assistance.",
+    canonical: "https://www.bantconfirm.com/contact",
+    h1: "Contact BANTConfirm Support Desk",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "ContactPage",
+      "name": "Contact BANTConfirm",
+      "description": "Contact BANTConfirm Support Desk for enterprise B2B partner registration and support.",
+      "url": "https://www.bantconfirm.com/contact"
+    }
+  },
+  "/services": {
+    title: "Our Services & Enterprise IT Solutions | BANTConfirm Marketplace",
+    description: "Explore qualified solutions for CRM Software, ERP Enterprise Suites, Cloud Telephony, WhatsApp Business API Automation, and Cyber Security Audits on BANTConfirm.",
+    canonical: "https://www.bantconfirm.com/services",
+    h1: "Our Sourcing Services & Solutions",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "Service",
+      "name": "BANTConfirm Sourcing Services",
+      "description": "Enterprise IT software and hardware pre-qualification and sourcing marketplace."
+    }
+  },
+  "/vendors": {
+    title: "Verified B2B Vendors & Certified Sourcing Partners | BANTConfirm",
+    description: "Meet verified BANTConfirm partner vendors across India. Access curated directories of CRM, ERP, and IT services providers who meet strict B2B delivery SLAs.",
+    canonical: "https://www.bantconfirm.com/vendors",
+    h1: "Verified BANT Sourcing Vendors",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "SearchResultsPage",
+      "name": "Verified Vendors Directory",
+      "description": "Directory of verified enterprise vendors on BANTConfirm."
+    }
+  },
+  "/categories": {
+    title: "Sourcing Categories & Industry Portals | BANTConfirm Marketplace",
+    description: "Browse top B2B software and services categories. Source verified IT products, read customer reviews, and receive multiple certified BANT quotes.",
+    canonical: "https://www.bantconfirm.com/categories",
+    h1: "Enterprise Solution Sourcing Categories",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      "name": "Sourcing Categories",
+      "description": "Categories list for pre-qualified B2B software and hardware solutions."
+    }
+  },
+  "/blog": {
+    title: "BANTConfirm Sourcing Blog | SME IT Procurement Sourcing Hub",
+    description: "Insights, guides, and tips on SME IT procurement. Learn how to qualify software vendors, optimize enterprise software budgets, and deploy verified BANT workflows.",
+    canonical: "https://www.bantconfirm.com/blog",
+    h1: "BANTConfirm Sourcing Blog & Guides",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "Blog",
+      "name": "BANTConfirm Sourcing Blog",
+      "description": "B2B procurement insight and BANT qualification resources."
+    }
+  },
+  "/privacy-policy": {
+    title: "Privacy Policy | BANTConfirm B2B Sourcing Portal",
+    description: "Read the Privacy Policy of BANTConfirm. Learn how we handle your company information, RfQ documents, and data security under Indian IT laws.",
+    canonical: "https://www.bantconfirm.com/privacy-policy",
+    h1: "Privacy Policy & Sourcing Protection SLA",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Privacy Policy"
+    }
+  },
+  "/terms-and-conditions": {
+    title: "Terms & Conditions of Service | BANTConfirm India",
+    description: "Terms and conditions of service for using the BANTConfirm platform as a buyer, vendor, or administrator. Read our SLA, referral reward terms, and verification rules.",
+    canonical: "https://www.bantconfirm.com/terms-and-conditions",
+    h1: "Terms & Conditions of Service",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Terms and Conditions"
+    }
+  },
+  "/dashboard": {
+    title: "BANT Sourcing Dashboard | BANTConfirm",
+    description: "Manage your active BANT qualified sourcing requirements, compare matched vendor bids, and track verified lead assignment milestones.",
+    canonical: "https://www.bantconfirm.com/dashboard",
+    h1: "BANT Sourcing Workspace Dashboard",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Buyer Sourcing Dashboard"
+    }
+  },
+  "/post": {
+    title: "Post Sourcing Requirement | BANT Sourcing Desk",
+    description: "Post your enterprise IT software, hardware or services sourcing requirements. Get direct responses pre-qualified with Budget, Authority, Need, and Timeline (BANT) criteria.",
+    canonical: "https://www.bantconfirm.com/post",
+    h1: "Submit Sourcing Requirement",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Post Sourcing Requirement"
+    }
+  },
+  "/become-partner": {
+    title: "Become a Sourcing Partner | BANT Sourcing Hub",
+    description: "Join BANTConfirm's elite network of certified IT software and hardware vendor partners. Get high-intent pre-qualified BANT-verified leads directly in UP, Delhi NCR, Bangalore and Mumbai.",
+    canonical: "https://www.bantconfirm.com/become-partner",
+    h1: "Partner with BANTConfirm Sourcing Hub",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Become a Partner"
+    }
+  },
+  "/admin-panel": {
+    title: "Admin Sourcing Desk | BANTConfirm",
+    description: "Global marketplace audit, category customization, lead routing rules, and vendor onboarding controls.",
+    canonical: "https://www.bantconfirm.com/admin-panel",
+    h1: "Admin Desk Console",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Admin Panel Sourcing Desk"
+    }
+  }
+};
+
+function getSEOPageHtml(reqPath: string, baseHtml: string) {
+  let p = reqPath.toLowerCase().replace(/\/$/, "");
+  if (p === "") p = "/";
+
+  const config = seoConfig[p] || seoConfig["/"];
+
+  const titleTag = `<title>${config.title}</title>`;
+  const metaTags = `
+    <meta name="description" content="${config.description}" />
+    <link rel="canonical" href="${config.canonical}" />
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${config.canonical}" />
+    <meta property="og:title" content="${config.title}" />
+    <meta property="og:description" content="${config.description}" />
+    <meta property="og:image" content="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&auto=format&fit=crop" />
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="${config.canonical}" />
+    <meta property="twitter:title" content="${config.title}" />
+    <meta property="twitter:description" content="${config.description}" />
+    <meta property="twitter:image" content="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&auto=format&fit=crop" />
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+      ${JSON.stringify(config.schema, null, 2)}
+    </script>
+  `;
+
+  let html = baseHtml.replace(/<title>.*?<\/title>/, titleTag);
+  html = html.replace("</head>", `${metaTags}\n</head>`);
+  return html;
+}
+
 async function startServer() {
+  // Serve dynamic Sitemap
+  app.get("/sitemap.xml", (req, res) => {
+    res.header("Content-Type", "application/xml");
+    const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://www.bantconfirm.com/</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/about</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/contact</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/services</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/vendors</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/categories</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/blog</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/privacy-policy</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/terms-and-conditions</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.bantconfirm.com/become-partner</loc>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+</urlset>`;
+    res.send(sitemapXml);
+  });
+
+  // Serve robots.txt
+  app.get("/robots.txt", (req, res) => {
+    res.header("Content-Type", "text/plain");
+    const robotsTxt = `# robots.txt for BANTConfirm Marketplace India
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /contact
+Allow: /services
+Allow: /vendors
+Allow: /categories
+Allow: /blog
+Allow: /privacy-policy
+Allow: /terms-and-conditions
+Allow: /become-partner
+Disallow: /admin-panel
+Disallow: /dashboard
+Disallow: /api/
+
+Sitemap: https://www.bantconfirm.com/sitemap.xml`;
+    res.send(robotsTxt);
+  });
+
+  // Catch SEO friendly static page routes
+  const seoPaths = [
+    "/",
+    "/about",
+    "/contact",
+    "/services",
+    "/vendors",
+    "/categories",
+    "/blog",
+    "/privacy-policy",
+    "/terms-and-conditions",
+    "/dashboard",
+    "/post",
+    "/become-partner",
+    "/admin-panel"
+  ];
+
+  seoPaths.forEach(seoPath => {
+    app.get(seoPath, async (req, res, next) => {
+      try {
+        let templatePath = "";
+        if (process.env.NODE_ENV !== "production") {
+          templatePath = path.join(process.cwd(), "index.html");
+        } else {
+          templatePath = path.join(process.cwd(), "dist", "index.html");
+        }
+        
+        let baseHtml = fs.readFileSync(templatePath, "utf-8");
+        const renderedHtml = getSEOPageHtml(req.path, baseHtml);
+        res.header("Content-Type", "text/html");
+        res.send(renderedHtml);
+      } catch (err) {
+        console.error("SEO Pre-render error for", seoPath, err);
+        next(); // fallback to standard static/vite
+      }
+    });
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -3743,7 +4072,15 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      try {
+        let templatePath = path.join(distPath, "index.html");
+        let baseHtml = fs.readFileSync(templatePath, "utf-8");
+        const renderedHtml = getSEOPageHtml(req.path, baseHtml);
+        res.header("Content-Type", "text/html");
+        res.send(renderedHtml);
+      } catch (err) {
+        res.sendFile(path.join(distPath, "index.html"));
+      }
     });
   }
 
