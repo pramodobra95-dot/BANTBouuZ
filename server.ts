@@ -3205,32 +3205,67 @@ app.put("/api/admin/trusted-vendors/:id", async (req, res) => {
   const { id } = req.params;
   const { vendor_name, logo_url, website_url, display_order, is_active } = req.body;
 
+  let existsInPg = false;
+  if (pgPool) {
+    try {
+      const q = await pgPool.query("SELECT * FROM trusted_vendors WHERE id = $1", [id]);
+      if (q.rows.length > 0) {
+        existsInPg = true;
+      }
+    } catch (err) {
+      console.error("Failed to check if trusted_vendor exists in PostgreSQL:", err);
+    }
+  }
+
   const idx = db.trustedVendors.findIndex(v => v.id === id);
-  if (idx === -1) {
+  if (idx === -1 && !existsInPg) {
     return res.status(404).json({ error: "Trusted vendor not found" });
   }
 
-  const updated = {
-    ...db.trustedVendors[idx],
-    vendor_name: vendor_name !== undefined ? vendor_name : db.trustedVendors[idx].vendor_name,
-    logo_url: logo_url !== undefined ? logo_url : db.trustedVendors[idx].logo_url,
-    website_url: website_url !== undefined ? website_url : db.trustedVendors[idx].website_url,
-    display_order: display_order !== undefined ? (typeof display_order === "number" ? display_order : parseInt(display_order || "0", 10)) : db.trustedVendors[idx].display_order,
-    is_active: is_active !== undefined ? !!is_active : db.trustedVendors[idx].is_active,
+  const existingLocal = idx !== -1 ? db.trustedVendors[idx] : {
+    id,
+    vendor_name: "",
+    logo_url: "",
+    website_url: "",
+    display_order: 0,
+    is_active: true,
+    created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
 
-  db.trustedVendors[idx] = updated;
+  const updated = {
+    ...existingLocal,
+    vendor_name: vendor_name !== undefined ? vendor_name : existingLocal.vendor_name,
+    logo_url: logo_url !== undefined ? logo_url : existingLocal.logo_url,
+    website_url: website_url !== undefined ? website_url : existingLocal.website_url,
+    display_order: display_order !== undefined ? (typeof display_order === "number" ? display_order : parseInt(display_order || "0", 10)) : existingLocal.display_order,
+    is_active: is_active !== undefined ? !!is_active : existingLocal.is_active,
+    updated_at: new Date().toISOString()
+  };
+
+  if (idx !== -1) {
+    db.trustedVendors[idx] = updated;
+  } else {
+    db.trustedVendors.push(updated);
+  }
   saveDb();
 
   if (pgPool) {
     try {
-      await pgPool.query(
-        `UPDATE trusted_vendors 
-         SET vendor_name = $1, logo_url = $2, website_url = $3, display_order = $4, is_active = $5, updated_at = $6
-         WHERE id = $7`,
-        [updated.vendor_name, updated.logo_url, updated.website_url, updated.display_order, updated.is_active, updated.updated_at, id]
-      );
+      if (existsInPg) {
+        await pgPool.query(
+          `UPDATE trusted_vendors 
+           SET vendor_name = $1, logo_url = $2, website_url = $3, display_order = $4, is_active = $5, updated_at = $6
+           WHERE id = $7`,
+          [updated.vendor_name, updated.logo_url, updated.website_url, updated.display_order, updated.is_active, updated.updated_at, id]
+        );
+      } else {
+        await pgPool.query(
+          `INSERT INTO trusted_vendors (id, vendor_name, logo_url, website_url, display_order, is_active, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [updated.id, updated.vendor_name, updated.logo_url, updated.website_url, updated.display_order, updated.is_active, updated.created_at, updated.updated_at]
+        );
+      }
     } catch (err) {
       console.error("Failed to update trusted_vendor in PostgreSQL:", err);
     }
@@ -3241,15 +3276,30 @@ app.put("/api/admin/trusted-vendors/:id", async (req, res) => {
 
 app.delete("/api/admin/trusted-vendors/:id", async (req, res) => {
   const { id } = req.params;
+
+  let existsInPg = false;
+  if (pgPool) {
+    try {
+      const q = await pgPool.query("SELECT * FROM trusted_vendors WHERE id = $1", [id]);
+      if (q.rows.length > 0) {
+        existsInPg = true;
+      }
+    } catch (err) {
+      console.error("Failed to check if trusted_vendor exists in PostgreSQL:", err);
+    }
+  }
+
   const idx = db.trustedVendors.findIndex(v => v.id === id);
-  if (idx === -1) {
+  if (idx === -1 && !existsInPg) {
     return res.status(404).json({ error: "Trusted vendor not found" });
   }
 
-  db.trustedVendors.splice(idx, 1);
-  saveDb();
+  if (idx !== -1) {
+    db.trustedVendors.splice(idx, 1);
+    saveDb();
+  }
 
-  if (pgPool) {
+  if (pgPool && existsInPg) {
     try {
       await pgPool.query("DELETE FROM trusted_vendors WHERE id = $1", [id]);
     } catch (err) {
