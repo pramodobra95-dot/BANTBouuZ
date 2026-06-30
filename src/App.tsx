@@ -17,6 +17,7 @@ import BecomePartnerView from "./components/BecomePartnerView";
 import AIChatBot from "./components/AIChatBot";
 import Footer from "./components/Footer";
 import SEOViewer from "./components/SEOViewer";
+import { ResetPasswordView } from "./components/ResetPasswordView";
 import { AboutPage, TermsPage, PrivacyPage } from "./components/CMSPages";
 import { safeAlert } from "./utils/safeAlert";
 import { supabase, isSupabaseConfigured } from "./lib/supabaseClient";
@@ -34,6 +35,16 @@ function OAuthCallbackHandler() {
   React.useEffect(() => {
     const handleAuth = async () => {
       try {
+        const hash = window.location.hash || "";
+        const search = window.location.search || "";
+        const isRecovery = hash.includes("type=recovery") || search.includes("type=recovery") || hash.includes("recovery_token=") || search.includes("recovery_token=");
+
+        if (isRecovery) {
+          console.log("[OAuthCallbackHandler] Password recovery flow detected. Redirecting to reset-password.");
+          window.location.href = `/reset-password${search}${hash}`;
+          return;
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
 
@@ -207,6 +218,7 @@ export default function App() {
     if (p === "/post") return "post";
     if (p === "/become-partner") return "become-partner";
     if (p === "/admin-panel") return "admin-panel";
+    if (p === "/reset-password") return "reset-password";
     return "home";
   };
 
@@ -565,6 +577,23 @@ export default function App() {
   const [signUpMobile, setSignUpMobile] = useState("");
   const [signUpCity, setSignUpCity] = useState("");
   const [signUpRole, setSignUpRole] = useState<'buyer' | 'vendor' | 'admin'>('buyer');
+
+  // Forgot Password fields state
+  const [isForgotPasswordView, setIsForgotPasswordView] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
+  const [forgotPasswordError, setForgotPasswordError] = useState<string | null>(null);
+
+  // Automatically reset forgot password modal state when modal closes
+  useEffect(() => {
+    if (!authModalOpen) {
+      setIsForgotPasswordView(false);
+      setForgotPasswordSuccess(false);
+      setForgotPasswordError(null);
+      setForgotPasswordEmail("");
+    }
+  }, [authModalOpen]);
 
   // Listen for Google OAuth callback success/error messages from the authentication popup window
   useEffect(() => {
@@ -1242,6 +1271,34 @@ export default function App() {
     fetchAllData();
   }, []);
 
+  // Recovery Flow Global Interceptor: If URL has recovery parameters or we get a PASSWORD_RECOVERY event, direct to reset-password
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    const isRecoveryUrl = hash.includes("type=recovery") || search.includes("type=recovery") || hash.includes("recovery_token=") || search.includes("recovery_token=");
+
+    if (isRecoveryUrl) {
+      console.log("[Recovery Flow Detected via URL] Preserving parameters and navigating to /reset-password");
+      if (location.pathname !== "/reset-password") {
+        navigate(`/reset-password${search}${hash}`);
+        return;
+      }
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        console.log("[PASSWORD_RECOVERY event] Forcing navigation to /reset-password");
+        navigate("/reset-password");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [location.pathname, navigate]);
+
   // Real-time subscriptions for Supabase
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -1399,6 +1456,47 @@ export default function App() {
     const interval = setInterval(checkNewRegistrations, 10000); // Poll every 10 seconds
     return () => clearInterval(interval);
   }, [currentUser, isSupabaseConfigured]);
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotPasswordEmail || !forgotPasswordEmail.trim() || !forgotPasswordEmail.includes("@")) {
+      setForgotPasswordError("Please enter a valid corporate email address.");
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError(null);
+    setForgotPasswordSuccess(false);
+
+    try {
+      // 1. If Supabase is active, trigger official Supabase authentication password reset
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail.trim(), {
+          redirectTo: `${window.location.origin}/reset-password`
+        });
+        if (error) throw error;
+      }
+
+      // 2. Trigger our beautifully unified Resend email template dispatch in parallel or as fallback
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotPasswordEmail.trim() })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to trigger security password reset.");
+      }
+
+      setForgotPasswordSuccess(true);
+    } catch (err: any) {
+      console.error("Forgot password error:", err);
+      setForgotPasswordError(err.message || "An unexpected error occurred. Please verify your email.");
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2899,6 +2997,24 @@ export default function App() {
               </motion.div>
             )}
 
+            {/* Reset Password view */}
+            {activeTab === 'reset-password' && (
+              <motion.div
+                key="reset-password"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25 }}
+                className="flex-grow container mx-auto px-4 py-8"
+              >
+                <ResetPasswordView onNavigateToLogin={() => {
+                  setAuthModalTab('login');
+                  setAuthModalOpen(true);
+                  setActiveTab('home');
+                }} />
+              </motion.div>
+            )}
+
             {/* Product Detail view */}
             {activeTab === 'product-detail' && (
               <motion.div
@@ -3279,104 +3395,190 @@ export default function App() {
             </div>
             
             {/* Toggle tabs */}
-            <div className="flex border-b text-sm font-bold">
-              <button 
-                type="button"
-                onClick={() => setAuthModalTab('login')}
-                className={`flex-1 py-3 text-center transition-all cursor-pointer ${authModalTab === 'login' ? 'border-b-2 border-[#0066FF] text-[#0066FF]' : 'text-slate-500 hover:text-slate-850'}`}
-              >
-                Log In
-              </button>
-              <button 
-                type="button"
-                onClick={() => setAuthModalTab('signup')}
-                className={`flex-1 py-3 text-center transition-all cursor-pointer ${authModalTab === 'signup' ? 'border-b-2 border-[#0066FF] text-[#0066FF]' : 'text-slate-500 hover:text-slate-855'}`}
-              >
-                Create Account
-              </button>
-            </div>             <div className="p-6 space-y-4">
-              {authModalTab === 'login' ? (
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div className="space-y-1 hidden">
-                    <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Select Role</label>
-                    <select 
-                      value={authRole}
-                      onChange={(e) => setAuthRole(e.target.value as any)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs font-bold focus:ring-1 focus:ring-blue-500 outline-hidden hidden"
-                    >
-                      <option value="buyer">Sourcing Buyer (Procurement / SME)</option>
-                      <option value="vendor">Solution Provider (SaaS / Vendor)</option>
-                      <option value="admin">Marketplace Administrator (Admin)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Email Address</label>
-                    <input 
-                      type="email" 
-                      required
-                      placeholder="e.g. info.bouuz@gmail.co" 
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-blue-500 outline-hidden"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Password</label>
-                    <input 
-                      type="password" 
-                      required
-                      placeholder="••••••••" 
-                      value={authPassword}
-                      onChange={(e) => setAuthPassword(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-blue-500 outline-hidden"
-                    />
-                  </div>
-                  <button 
-                    type="submit"
-                    className="w-full bg-[#0066FF] hover:bg-blue-700 text-white font-extrabold py-2.5 rounded-lg text-xs transition-all shadow-sm cursor-pointer"
-                  >
-                    Authenticate Session
-                  </button>
-                  <div className="relative flex py-1.5 items-center">
-                    <div className="flex-grow border-t border-slate-100"></div>
-                    <span className="flex-shrink mx-3 text-slate-400 text-[10px] font-bold uppercase tracking-wider">or</span>
-                    <div className="flex-grow border-t border-slate-100"></div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleGoogleAuth('login')}
-                    disabled={authLoading}
-                    className="w-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-extrabold py-2.5 rounded-lg text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24">
-                      <path
-                        fill="#EA4335"
-                        d="M5.26620007,9.76452941 C6.19875005,6.93863435 8.8544399,4.90909091 12,4.90909091 C13.6909091,4.90909091 15.2181818,5.52272727 16.4181818,6.54545455 L19.8272727,3.13636364 C17.7636364,1.19090909 15.0181818,0 12,0 C7.33124803,0 3.32766107,2.83615413 1.5791244,6.92488349 L5.26620007,9.76452941 Z"
-                      />
-                      <path
-                        fill="#4285F4"
-                        d="M23.490008,12.2727273 C23.490008,11.4136364 23.4136444,10.5954545 23.2727354,9.81818182 L12,9.81818182 L12,14.6363636 L18.4545455,14.6363636 C18.1772727,16.1272727 17.3363636,17.3909091 16.0727273,18.2363636 L19.8272727,21.1454545 C22.0227273,19.1181818 23.490008,16.1272727 23.490008,12.2727273 Z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M5.26620007,14.2354706 L1.5791244,17.0751165 C3.32766107,21.1638459 7.33124803,24 12,24 C15.0181818,24 17.7636364,22.8090909 19.8272727,20.8636364 L16.0727273,17.9545455 C15.0318182,18.65 13.6272727,19.0909091 12,19.0909091 C8.8544399,19.0909091 6.19875005,17.0613657 5.26620007,14.2354706 Z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M5.26620007,9.76452941 C4.98185012,10.6300181 4.82352941,11.5574679 4.82352941,12.5190909 C4.82352941,13.4807139 4.98185012,14.4081637 5.26620007,15.2736524 L1.5791244,18.1132983 C0.570258163,16.4258909 0,14.4925722 0,12.5190909 C0,10.5456096 0.570258163,8.61229093 1.5791244,6.92488349 L5.26620007,9.76452941 Z"
-                      />
-                    </svg>
-                    {authLoading ? "Establishing Connection..." : "Continue with Google"}
-                  </button>
-                  <div className="pt-3 border-t border-slate-100 text-center space-y-1 select-none hidden">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Demo Credentials</p>
-                    <p className="text-[10px] text-slate-500 leading-relaxed">
-                      Admin: <span className="text-[#0066FF] font-extrabold">info.bouuz@gmail.com</span><br />
-                      Buyer: <span className="text-slate-700 font-semibold">buyer@bantconfirm.com</span> | Vendor: <span className="text-slate-700 font-semibold">vendor@bantconfirm.com</span><br />
-                      <span className="text-[9px] text-slate-400 italic">Password: any value</span>
-                    </p>
-                  </div>
-                </form>
+            {!isForgotPasswordView && (
+              <div className="flex border-b text-sm font-bold">
+                <button 
+                  type="button"
+                  onClick={() => setAuthModalTab('login')}
+                  className={`flex-1 py-3 text-center transition-all cursor-pointer ${authModalTab === 'login' ? 'border-b-2 border-[#0066FF] text-[#0066FF]' : 'text-slate-500 hover:text-slate-850'}`}
+                >
+                  Log In
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setAuthModalTab('signup')}
+                  className={`flex-1 py-3 text-center transition-all cursor-pointer ${authModalTab === 'signup' ? 'border-b-2 border-[#0066FF] text-[#0066FF]' : 'text-slate-500 hover:text-slate-855'}`}
+                >
+                  Create Account
+                </button>
+              </div>
+            )}             <div className="p-6 space-y-4">
+               {isForgotPasswordView ? (
+                 <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                   <div className="text-center space-y-2 pb-2">
+                     <h4 className="text-sm font-black text-slate-800">Trouble Signing In?</h4>
+                     <p className="text-xs text-slate-500 leading-relaxed">
+                       Enter your registered email address below and we'll send you a secure link to reset your password instantly.
+                     </p>
+                   </div>
+
+                   {forgotPasswordSuccess ? (
+                     <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 text-center space-y-2.5">
+                       <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                         ✓
+                       </div>
+                       <p className="text-xs text-emerald-800 font-bold leading-relaxed">
+                         Security verification email dispatched successfully! Please check your inbox and click the reset link.
+                       </p>
+                       <button
+                         type="button"
+                         onClick={() => {
+                           setIsForgotPasswordView(false);
+                           setForgotPasswordSuccess(false);
+                         }}
+                         className="text-[10px] text-blue-600 hover:underline font-extrabold cursor-pointer"
+                       >
+                         Return to Login
+                       </button>
+                     </div>
+                   ) : (
+                     <>
+                       {forgotPasswordError && (
+                         <div className="bg-red-50 border border-red-100 rounded-lg p-3 text-xs text-red-700 font-medium">
+                           {forgotPasswordError}
+                         </div>
+                       )}
+
+                       <div className="space-y-1">
+                         <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Corporate Email Address</label>
+                         <input
+                           type="email"
+                           required
+                           placeholder="e.g. info.bouuz@gmail.co"
+                           value={forgotPasswordEmail}
+                           onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                           className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-blue-500 outline-hidden"
+                         />
+                       </div>
+
+                       <button
+                         type="submit"
+                         disabled={forgotPasswordLoading}
+                         className="w-full bg-[#0066FF] hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold py-2.5 rounded-lg text-xs transition-all shadow-sm cursor-pointer"
+                       >
+                         {forgotPasswordLoading ? "Dispatching security link..." : "Send Reset Link"}
+                       </button>
+
+                       <div className="text-center pt-2">
+                         <button
+                           type="button"
+                           onClick={() => {
+                             setIsForgotPasswordView(false);
+                             setForgotPasswordError(null);
+                           }}
+                           className="text-xs text-[#0066FF] hover:underline font-extrabold cursor-pointer"
+                         >
+                           Back to Login
+                         </button>
+                       </div>
+                     </>
+                   )}
+                 </form>
+               ) : authModalTab === 'login' ? (
+                 <form onSubmit={handleLoginSubmit} className="space-y-4">
+                   <div className="space-y-1 hidden">
+                     <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Select Role</label>
+                     <select 
+                       value={authRole}
+                       onChange={(e) => setAuthRole(e.target.value as any)}
+                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs font-bold focus:ring-1 focus:ring-blue-500 outline-hidden hidden"
+                     >
+                       <option value="buyer">Sourcing Buyer (Procurement / SME)</option>
+                       <option value="vendor">Solution Provider (SaaS / Vendor)</option>
+                       <option value="admin">Marketplace Administrator (Admin)</option>
+                     </select>
+                   </div>
+                   <div className="space-y-1">
+                     <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Email Address</label>
+                     <input 
+                       type="email" 
+                       required
+                       placeholder="e.g. info.bouuz@gmail.co" 
+                       value={authEmail}
+                       onChange={(e) => setAuthEmail(e.target.value)}
+                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-blue-500 outline-hidden"
+                     />
+                   </div>
+                   <div className="space-y-1">
+                     <div className="flex justify-between items-center">
+                       <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Password</label>
+                       <button
+                         type="button"
+                         onClick={() => {
+                           setIsForgotPasswordView(true);
+                           setForgotPasswordEmail(authEmail);
+                           setForgotPasswordError(null);
+                         }}
+                         className="text-[10px] text-[#0066FF] hover:underline font-bold cursor-pointer"
+                       >
+                         Forgot Password?
+                       </button>
+                     </div>
+                     <input 
+                       type="password" 
+                       required
+                       placeholder="••••••••" 
+                       value={authPassword}
+                       onChange={(e) => setAuthPassword(e.target.value)}
+                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-blue-500 outline-hidden"
+                     />
+                   </div>
+                   <button 
+                     type="submit"
+                     className="w-full bg-[#0066FF] hover:bg-blue-700 text-white font-extrabold py-2.5 rounded-lg text-xs transition-all shadow-sm cursor-pointer"
+                   >
+                     Authenticate Session
+                   </button>
+                   <div className="relative flex py-1.5 items-center">
+                     <div className="flex-grow border-t border-slate-100"></div>
+                     <span className="flex-shrink mx-3 text-slate-400 text-[10px] font-bold uppercase tracking-wider">or</span>
+                     <div className="flex-grow border-t border-slate-100"></div>
+                   </div>
+                   <button
+                     type="button"
+                     onClick={() => handleGoogleAuth('login')}
+                     disabled={authLoading}
+                     className="w-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-extrabold py-2.5 rounded-lg text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                   >
+                     <svg className="w-4 h-4" viewBox="0 0 24 24">
+                       <path
+                         fill="#EA4335"
+                         d="M5.26620007,9.76452941 C6.19875005,6.93863435 8.8544399,4.90909091 12,4.90909091 C13.6909091,4.90909091 15.2181818,5.52272727 16.4181818,6.54545455 L19.8272727,3.13636364 C17.7636364,1.19090909 15.0181818,0 12,0 C7.33124803,0 3.32766107,2.83615413 1.5791244,6.92488349 L5.26620007,9.76452941 Z"
+                       />
+                       <path
+                         fill="#4285F4"
+                         d="M23.490008,12.2727273 C23.490008,11.4136364 23.4136444,10.5954545 23.2727354,9.81818182 L12,9.81818182 L12,14.6363636 L18.4545455,14.6363636 C18.1772727,16.1272727 17.3363636,17.3909091 16.0727273,18.2363636 L19.8272727,21.1454545 C22.0227273,19.1181818 23.490008,16.1272727 23.490008,12.2727273 Z"
+                       />
+                       <path
+                         fill="#FBBC05"
+                         d="M5.26620007,14.2354706 L1.5791244,17.0751165 C3.32766107,21.1638459 7.33124803,24 12,24 C15.0181818,24 17.7636364,22.8090909 19.8272727,20.8636364 L16.0727273,17.9545455 C15.0318182,18.65 13.6272727,19.0909091 12,19.0909091 C8.8544399,19.0909091 6.19875005,17.0613657 5.26620007,14.2354706 Z"
+                       />
+                       <path
+                         fill="#34A853"
+                         d="M5.26620007,9.76452941 C4.98185012,10.6300181 4.82352941,11.5574679 4.82352941,12.5190909 C4.82352941,13.4807139 4.98185012,14.4081637 5.26620007,15.2736524 L1.5791244,18.1132983 C0.570258163,16.4258909 0,14.4925722 0,12.5190909 C0,10.5456096 0.570258163,8.61229093 1.5791244,6.92488349 L5.26620007,9.76452941 Z"
+                       />
+                     </svg>
+                     {authLoading ? "Establishing Connection..." : "Continue with Google"}
+                   </button>
+                   <div className="pt-3 border-t border-slate-100 text-center space-y-1 select-none hidden">
+                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Demo Credentials</p>
+                     <p className="text-[10px] text-slate-500 leading-relaxed">
+                       Admin: <span className="text-[#0066FF] font-extrabold">info.bouuz@gmail.com</span><br />
+                       Buyer: <span className="text-slate-700 font-semibold">buyer@bantconfirm.com</span> | Vendor: <span className="text-slate-700 font-semibold">vendor@bantconfirm.com</span><br />
+                       <span className="text-[9px] text-slate-400 italic">Password: any value</span>
+                     </p>
+                   </div>
+                 </form>
               ) : (
                 <form onSubmit={handleSignUpSubmit} className="space-y-3">
                   <div className="space-y-1 hidden">
@@ -3420,8 +3622,21 @@ export default function App() {
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-blue-500 outline-hidden"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Choose Password * (Mandatory)</label>
+                   <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Choose Password * (Mandatory)</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsForgotPasswordView(true);
+                          setForgotPasswordEmail(signUpEmail);
+                          setForgotPasswordError(null);
+                        }}
+                        className="text-[10px] text-[#0066FF] hover:underline font-bold cursor-pointer"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
                     <input 
                       type="password" 
                       required
