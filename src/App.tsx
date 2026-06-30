@@ -20,6 +20,8 @@ import SEOViewer from "./components/SEOViewer";
 import { AboutPage, TermsPage, PrivacyPage } from "./components/CMSPages";
 import { safeAlert } from "./utils/safeAlert";
 import { supabase, isSupabaseConfigured } from "./lib/supabaseClient";
+import { matchSourcingRoute, generateSourcingSEO } from "./lib/seoData";
+import SourcingLandingPage from "./components/SourcingLandingPage";
 
 import { 
   Category, Product, Vendor, Lead, Blog, Banner, Testimonial, Notification, TrustedVendor 
@@ -192,6 +194,7 @@ export default function App() {
     const p = path.toLowerCase().replace(/\/$/, "");
     if (p === "") return "home";
     if (p.startsWith("/products/")) return "product-detail";
+    if (p.startsWith("/sourcing/")) return "sourcing-landing";
     if (p === "/about") return "about";
     if (p === "/contact") return "contact";
     if (p === "/services") return "home"; // solutions
@@ -357,6 +360,31 @@ export default function App() {
     if (pathname === "/blogs") pathname = "/blog";
 
     let seo = seoMap[pathname] || seoMap["/"];
+
+    if (pathname.startsWith("/sourcing/")) {
+      const matched = matchSourcingRoute(location.pathname);
+      if (matched) {
+        const generated = generateSourcingSEO(matched.product, matched.location);
+        seo = {
+          title: generated.title,
+          description: generated.description,
+          canonical: generated.canonical,
+          schema: generated.schema
+        };
+      } else {
+        seo = {
+          title: "BANT Certified Location Sourcing | BANTConfirm",
+          description: "Explore dynamic, pre-qualified B2B software and hardware solutions matched to regional delivery specifications across India.",
+          canonical: `https://www.bantconfirm.com${location.pathname}`,
+          schema: {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "BANTConfirm",
+            "url": "https://www.bantconfirm.com/"
+          }
+        };
+      }
+    }
 
     if (pathname.startsWith("/products/")) {
       const slug = pathname.substring("/products/".length);
@@ -2887,6 +2915,42 @@ export default function App() {
                 />
               </motion.div>
             )}
+
+            {/* Sourcing Localized Landing Page */}
+            {activeTab === 'sourcing-landing' && (() => {
+              const matched = matchSourcingRoute(location.pathname);
+              if (matched) {
+                return (
+                  <motion.div
+                    key="sourcing-landing"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <SourcingLandingPage
+                      product={matched.product}
+                      location={matched.location}
+                      currentUser={currentUser}
+                      onPostLead={handlePostLead}
+                      onNavigateToTab={(tab) => {
+                        if (tab === "dashboard") {
+                          setCurrentRole("buyer");
+                          setActiveTab("dashboard");
+                        } else {
+                          setActiveTab(tab);
+                        }
+                      }}
+                    />
+                  </motion.div>
+                );
+              }
+              return (
+                <div className="py-24 text-center">
+                  <p className="text-sm font-bold text-slate-500">Sourcing profile not found. Redirecting to home...</p>
+                </div>
+              );
+            })()}
 
             {/* Blogs list view */}
             {activeTab === 'blogs' && (

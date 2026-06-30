@@ -4073,6 +4073,42 @@ async function startServer() {
     <priority>${url.priority}</priority>
   </url>`).join("");
 
+    // Add dynamic city-wise, state-wise, and industrial area B2B Sourcing landing pages (1,080 pages)
+    const productSlugs = [
+      "cloud-telephony", "bulk-sms", "bulk-email", "whatsapp-business-api", 
+      "crm-software", "erp-software", "cloud-hosting", "microsoft-365", 
+      "google-workspace", "internet-lease-line", "sip-trunk", "pri", 
+      "toll-free-number", "virtual-number", "cloud-contact-center", "ivr-solution", 
+      "call-recording", "ai-voice-bot", "ai-chatbot", "email-marketing", 
+      "digital-marketing", "seo-services", "website-development", "mobile-app-development"
+    ];
+
+    const locationSlugs = [
+      // Cities
+      "delhi", "mumbai", "pune", "bengaluru", "hyderabad", "chennai", "ahmedabad", "kolkata", 
+      "noida", "gurugram", "ghaziabad", "chandigarh", "indore", "jaipur", "lucknow", "surat", 
+      "nagpur", "coimbatore", "kochi", "visakhapatnam",
+      // States
+      "maharashtra", "gujarat", "karnataka", "tamil-nadu", "uttar-pradesh", "rajasthan", 
+      "punjab", "haryana", "madhya-pradesh", "telangana",
+      // Industrial Areas
+      "midc-pune", "bhosari", "chakan", "hinjewadi", "noida-sector-62", "electronic-city-bengaluru", 
+      "gurugram-cyber-city", "udyog-vihar", "okhla-industrial-area", "naraina-industrial-area", 
+      "bawana", "peenya", "gidc-ahmedabad", "midc-nashik", "midc-nagpur"
+    ];
+
+    productSlugs.forEach(pSlug => {
+      locationSlugs.forEach(lSlug => {
+        urlsXml += `
+  <url>
+    <loc>https://www.bantconfirm.com/sourcing/${pSlug}-in-${lSlug}</loc>
+    <lastmod>${todayStr}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>`;
+      });
+    });
+
     // Add active products from the local/Postgres database
     if (db.products && Array.isArray(db.products)) {
       db.products.filter(p => p.approved).forEach(p => {
