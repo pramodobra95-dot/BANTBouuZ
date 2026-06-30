@@ -174,104 +174,116 @@ export default function AdminPanel({
     }
 
     try {
-      const url = editingTv 
-        ? `/api/admin/trusted-vendors/${editingTv.id}`
-        : "/api/admin/trusted-vendors";
-      const method = editingTv ? "PUT" : "POST";
+      const tvId = editingTv ? editingTv.id : `tv-${Date.now()}`;
+      const tvData = {
+        id: tvId,
+        vendor_name: tvForm.vendor_name,
+        logo_url: tvForm.logo_url,
+        website_url: tvForm.website_url || null,
+        display_order: typeof tvForm.display_order === "number" ? tvForm.display_order : parseInt(String(tvForm.display_order) || "0", 10),
+        is_active: tvForm.is_active !== false,
+        created_at: editingTv?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        createdAt: editingTv?.created_at || new Date().toISOString()
+      };
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tvForm)
-      });
+      let savedLocal = false;
+      try {
+        const url = editingTv 
+          ? `/api/admin/trusted-vendors/${editingTv.id}`
+          : "/api/admin/trusted-vendors";
+        const method = editingTv ? "PUT" : "POST";
 
-      if (res.ok) {
-        const savedTv = await res.json();
-
-        // If Supabase is configured, sync to Supabase as well
-        if (isSupabaseConfigured) {
-          try {
-            const fullTvData = {
-              id: savedTv.id,
-              vendor_name: savedTv.vendor_name,
-              logo_url: savedTv.logo_url,
-              website_url: savedTv.website_url || null,
-              display_order: savedTv.display_order || 0,
-              is_active: savedTv.is_active !== false,
-              created_at: savedTv.created_at || new Date().toISOString(),
-              updated_at: savedTv.updated_at || new Date().toISOString(),
-              createdAt: savedTv.created_at || new Date().toISOString()
-            };
-
-            // Try with full payload
-            let { error } = await supabase.from("trusted_vendors").upsert([fullTvData]);
-            
-            if (error) {
-              console.warn("Supabase trusted_vendors sync with full fields failed. Retrying with core fields only...", error);
-              
-              // Core fields only
-              const coreTvData = {
-                id: savedTv.id,
-                vendor_name: savedTv.vendor_name,
-                logo_url: savedTv.logo_url,
-                website_url: savedTv.website_url || null,
-                display_order: savedTv.display_order || 0,
-                is_active: savedTv.is_active !== false
-              };
-              
-              const retryRes = await supabase.from("trusted_vendors").upsert([coreTvData]);
-              if (retryRes.error) {
-                console.error("Supabase trusted_vendors sync retry with core fields also failed:", retryRes.error);
-              } else {
-                console.log("Successfully synced trusted vendor to Supabase using core fields fallback!");
-              }
-            } else {
-              console.log("Successfully synced trusted vendor to Supabase with full fields!");
-            }
-          } catch (supabaseErr) {
-            console.error("Resilient fallback: Supabase trusted_vendors sync failed:", supabaseErr);
-          }
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...tvForm, id: tvId })
+        });
+        if (res.ok) {
+          savedLocal = true;
         }
-
-        setShowTvForm(false);
-        fetchTrustedVendors();
-        if (onRefreshData) onRefreshData();
-      } else {
-        const err = await res.json();
-        safeAlert(`Error: ${err.error || "failed to save"}`);
+      } catch (err) {
+        console.warn("Local server trusted_vendors save failed/not available, relying on Supabase:", err);
       }
-    } catch (err) {
+
+      // If Supabase is configured, sync to Supabase as well
+      if (isSupabaseConfigured) {
+        try {
+          // Try with full payload
+          let { error } = await supabase.from("trusted_vendors").upsert([tvData]);
+          
+          if (error) {
+            console.warn("Supabase trusted_vendors sync with full fields failed. Retrying with core fields only...", error);
+            
+            // Core fields only
+            const coreTvData = {
+              id: tvData.id,
+              vendor_name: tvData.vendor_name,
+              logo_url: tvData.logo_url,
+              website_url: tvData.website_url,
+              display_order: tvData.display_order,
+              is_active: tvData.is_active
+            };
+            
+            const retryRes = await supabase.from("trusted_vendors").upsert([coreTvData]);
+            if (retryRes.error) {
+              console.error("Supabase trusted_vendors sync retry with core fields also failed:", retryRes.error);
+              if (!savedLocal) throw retryRes.error;
+            } else {
+              console.log("Successfully synced trusted vendor to Supabase using core fields fallback!");
+            }
+          } else {
+            console.log("Successfully synced trusted vendor to Supabase with full fields!");
+          }
+        } catch (supabaseErr) {
+          console.error("Resilient fallback: Supabase trusted_vendors sync failed:", supabaseErr);
+          if (!savedLocal) throw supabaseErr;
+        }
+      }
+
+      setShowTvForm(false);
+      fetchTrustedVendors();
+      if (onRefreshData) onRefreshData();
+    } catch (err: any) {
       console.error(err);
-      safeAlert("An unexpected error occurred while saving.");
+      safeAlert(`An unexpected error occurred while saving: ${err?.message || err}`);
     }
   };
 
   const handleDeleteTv = async (id: string) => {
     if (!confirm("Are you sure you want to delete this trusted vendor?")) return;
     try {
-      const res = await fetch(`/api/admin/trusted-vendors/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        // If Supabase is configured, delete from Supabase as well
-        if (isSupabaseConfigured) {
-          try {
-            const { error } = await supabase.from("trusted_vendors").delete().eq("id", id);
-            if (error) {
-              console.error("Supabase trusted_vendors delete error:", error);
-            } else {
-              console.log("Successfully deleted trusted vendor from Supabase!");
-            }
-          } catch (supabaseErr) {
-            console.error("Resilient fallback: Supabase trusted_vendors delete failed:", supabaseErr);
-          }
+      let deletedLocal = false;
+      try {
+        const res = await fetch(`/api/admin/trusted-vendors/${id}`, { method: "DELETE" });
+        if (res.ok) {
+          deletedLocal = true;
         }
-
-        fetchTrustedVendors();
-        if (onRefreshData) onRefreshData();
-      } else {
-        safeAlert("Failed to delete trusted vendor.");
+      } catch (err) {
+        console.warn("Local server trusted_vendors delete failed/not available, relying on Supabase:", err);
       }
-    } catch (err) {
+
+      // If Supabase is configured, delete from Supabase as well
+      if (isSupabaseConfigured) {
+        try {
+          const { error } = await supabase.from("trusted_vendors").delete().eq("id", id);
+          if (error) {
+            console.error("Supabase trusted_vendors delete error:", error);
+            if (!deletedLocal) throw error;
+          } else {
+            console.log("Successfully deleted trusted vendor from Supabase!");
+          }
+        } catch (supabaseErr) {
+          console.error("Resilient fallback: Supabase trusted_vendors delete failed:", supabaseErr);
+          if (!deletedLocal) throw supabaseErr;
+        }
+      }
+
+      fetchTrustedVendors();
+      if (onRefreshData) onRefreshData();
+    } catch (err: any) {
       console.error(err);
+      safeAlert(`Failed to delete trusted vendor: ${err?.message || err}`);
     }
   };
 

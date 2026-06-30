@@ -2324,38 +2324,179 @@ export default function App() {
 
   const handleAddBlog = async (blogData: any) => {
     try {
-      const res = await fetch("/api/blogs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(blogData)
-      });
-      if (res.ok) fetchAllData();
-    } catch (err) { console.error(err); }
+      let savedLocal = false;
+      const localId = blogData.id || `blog-${Date.now()}`;
+      const submission = { ...blogData, id: localId };
+
+      try {
+        const res = await fetch("/api/blogs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(submission)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.id) {
+            submission.id = data.id;
+          }
+          savedLocal = true;
+        }
+      } catch (err) {
+        console.warn("Local server insert failed/not available, relying on Supabase:", err);
+      }
+
+      if (isSupabaseConfigured) {
+        console.log("Syncing new blog to Supabase:", submission);
+        const supabaseBlogData = {
+          id: submission.id,
+          title: submission.title,
+          content: submission.content,
+          image: submission.image,
+          category: submission.category,
+          tags: Array.isArray(submission.tags) ? submission.tags : [],
+          author: submission.author,
+          readTime: submission.readTime || "5 mins read",
+          slug: submission.slug,
+          likes: submission.likes || 0,
+          createdAt: submission.createdAt || new Date().toISOString(),
+          metaTitle: submission.metaTitle,
+          metaDescription: submission.metaDescription,
+          metaKeywords: submission.metaKeywords,
+          focusKeyword: submission.focusKeyword,
+          schemaMarkup: submission.schemaMarkup,
+          status: submission.status || "Published",
+          views: submission.views || 0,
+          isAiGenerated: !!submission.isAiGenerated,
+          shortDescription: submission.shortDescription,
+          canonicalUrl: submission.canonicalUrl,
+          publishDate: submission.publishDate || new Date().toISOString(),
+          excerpt: submission.shortDescription || ""
+        };
+
+        const { error } = await supabase.from("blogs").upsert([supabaseBlogData]);
+        if (error) {
+          console.error("Supabase blogs upsert error:", error);
+          if (!savedLocal) throw error;
+        } else {
+          console.log("Successfully upserted blog to Supabase!");
+        }
+      }
+
+      fetchAllData();
+    } catch (err: any) {
+      console.error("Error adding blog:", err);
+      alert(`Error saving blog: ${err.message || err}`);
+    }
   };
 
   const handleLikeBlog = async (blogId: string) => {
     try {
-      const res = await fetch(`/api/blogs/${blogId}/like`, { method: "POST" });
-      if (res.ok) fetchAllData();
+      let likedLocal = false;
+      try {
+        const res = await fetch(`/api/blogs/${blogId}/like`, { method: "POST" });
+        if (res.ok) likedLocal = true;
+      } catch (err) {
+        console.warn("Local server like failed/not available:", err);
+      }
+
+      if (isSupabaseConfigured) {
+        const { data, error: fetchErr } = await supabase.from("blogs").select("likes").eq("id", blogId).single();
+        if (!fetchErr && data) {
+          const newLikes = (data.likes || 0) + 1;
+          const { error: updateErr } = await supabase.from("blogs").update({ likes: newLikes }).eq("id", blogId);
+          if (updateErr) {
+            console.error("Supabase likes update error:", updateErr);
+          }
+        }
+      }
+
+      fetchAllData();
     } catch (err) { console.error(err); }
   };
 
   const handleDeleteBlog = async (blogId: string) => {
     try {
-      const res = await fetch(`/api/blogs/${blogId}`, { method: "DELETE" });
-      if (res.ok) fetchAllData();
-    } catch (err) { console.error(err); }
+      let deletedLocal = false;
+      try {
+        const res = await fetch(`/api/blogs/${blogId}`, { method: "DELETE" });
+        if (res.ok) deletedLocal = true;
+      } catch (err) {
+        console.warn("Local server delete failed/not available, relying on Supabase:", err);
+      }
+
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("blogs").delete().eq("id", blogId);
+        if (error) {
+          console.error("Supabase blogs delete error:", error);
+          if (!deletedLocal) throw error;
+        } else {
+          console.log("Successfully deleted blog from Supabase!");
+        }
+      }
+
+      fetchAllData();
+    } catch (err: any) {
+      console.error("Error deleting blog:", err);
+      alert(`Error deleting blog: ${err.message || err}`);
+    }
   };
 
   const handleUpdateBlog = async (blogId: string, blogData: any) => {
     try {
-      const res = await fetch(`/api/blogs/${blogId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(blogData)
-      });
-      if (res.ok) fetchAllData();
-    } catch (err) { console.error(err); }
+      let savedLocal = false;
+      try {
+        const res = await fetch(`/api/blogs/${blogId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(blogData)
+        });
+        if (res.ok) savedLocal = true;
+      } catch (err) {
+        console.warn("Local server update failed/not available, relying on Supabase:", err);
+      }
+
+      if (isSupabaseConfigured) {
+        console.log("Syncing updated blog to Supabase:", blogId, blogData);
+        const supabaseBlogData = {
+          id: blogId,
+          title: blogData.title,
+          content: blogData.content,
+          image: blogData.image,
+          category: blogData.category,
+          tags: Array.isArray(blogData.tags) ? blogData.tags : [],
+          author: blogData.author,
+          readTime: blogData.readTime || "5 mins read",
+          slug: blogData.slug,
+          likes: blogData.likes || 0,
+          createdAt: blogData.createdAt || new Date().toISOString(),
+          metaTitle: blogData.metaTitle,
+          metaDescription: blogData.metaDescription,
+          metaKeywords: blogData.metaKeywords,
+          focusKeyword: blogData.focusKeyword,
+          schemaMarkup: blogData.schemaMarkup,
+          status: blogData.status || "Published",
+          views: blogData.views || 0,
+          isAiGenerated: !!blogData.isAiGenerated,
+          shortDescription: blogData.shortDescription,
+          canonicalUrl: blogData.canonicalUrl,
+          publishDate: blogData.publishDate || new Date().toISOString(),
+          excerpt: blogData.shortDescription || ""
+        };
+
+        const { error } = await supabase.from("blogs").upsert([supabaseBlogData]);
+        if (error) {
+          console.error("Supabase blogs update error:", error);
+          if (!savedLocal) throw error;
+        } else {
+          console.log("Successfully updated blog in Supabase!");
+        }
+      }
+
+      fetchAllData();
+    } catch (err: any) {
+      console.error("Error updating blog:", err);
+      alert(`Error updating blog: ${err.message || err}`);
+    }
   };
 
   const handleUpdateCMSPage = async (key: string, val: string) => {
