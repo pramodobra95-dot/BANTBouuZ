@@ -1324,12 +1324,22 @@ export default function App() {
     }
   }, [location.pathname]);
 
-  // Automatic URL reset back to / when auth modal is closed from /login or /signup
+  // Sync modal state back to browser URL
   useEffect(() => {
-    if (!authModalOpen && (location.pathname === "/login" || location.pathname === "/signup")) {
-      navigate("/");
+    if (authModalOpen) {
+      const path = location.pathname.toLowerCase().replace(/\/$/, "");
+      if (authModalTab === "login" && path !== "/login") {
+        navigate("/login", { replace: true });
+      } else if (authModalTab === "signup" && path !== "/signup") {
+        navigate("/signup", { replace: true });
+      }
+    } else {
+      const path = location.pathname.toLowerCase().replace(/\/$/, "");
+      if (path === "/login" || path === "/signup") {
+        navigate("/", { replace: true });
+      }
     }
-  }, [authModalOpen, location.pathname, navigate]);
+  }, [authModalOpen, authModalTab, location.pathname, navigate]);
 
   // Real-time subscriptions for Supabase
   useEffect(() => {
