@@ -4562,9 +4562,15 @@ Sitemap: https://www.bantconfirm.com/sitemap.xml`;
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`BANTConfirm backend running on http://0.0.0.0:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`BANTConfirm backend running on http://0.0.0.0:${PORT}`);
+    });
+  }
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
