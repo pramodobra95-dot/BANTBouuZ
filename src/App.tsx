@@ -45,6 +45,13 @@ function OAuthCallbackHandler() {
           return;
         }
 
+        const searchParams = new URLSearchParams(search || (hash.includes("?") ? hash.substring(hash.indexOf("?")) : ""));
+        const code = searchParams.get("code");
+        if (code) {
+          console.log("[OAuthCallbackHandler] Authorization code detected, exchanging for session...");
+          await supabase.auth.exchangeCodeForSession(code);
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
 
@@ -219,6 +226,7 @@ export default function App() {
     if (p === "/become-partner") return "become-partner";
     if (p === "/admin-panel") return "admin-panel";
     if (p === "/reset-password") return "reset-password";
+    if (p === "/login" || p === "/signup") return "home";
     return "home";
   };
 
@@ -599,7 +607,12 @@ export default function App() {
   useEffect(() => {
     const handleOAuthMessage = async (event: MessageEvent) => {
       const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+      if (
+        origin !== window.location.origin &&
+        !origin.endsWith('.run.app') &&
+        !origin.includes('localhost') &&
+        !origin.includes('bantconfirm.com')
+      ) {
         return;
       }
       
@@ -1298,6 +1311,25 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, [location.pathname, navigate]);
+
+  // Automatic Auth Modal opening for /login and /signup routes
+  useEffect(() => {
+    const path = location.pathname.toLowerCase().replace(/\/$/, "");
+    if (path === "/login") {
+      setAuthModalTab("login");
+      setAuthModalOpen(true);
+    } else if (path === "/signup") {
+      setAuthModalTab("signup");
+      setAuthModalOpen(true);
+    }
+  }, [location.pathname]);
+
+  // Automatic URL reset back to / when auth modal is closed from /login or /signup
+  useEffect(() => {
+    if (!authModalOpen && (location.pathname === "/login" || location.pathname === "/signup")) {
+      navigate("/");
+    }
+  }, [authModalOpen, location.pathname, navigate]);
 
   // Real-time subscriptions for Supabase
   useEffect(() => {
