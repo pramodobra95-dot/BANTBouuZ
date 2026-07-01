@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import compression from "compression";
-import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import pg from "pg";
@@ -11,6 +10,18 @@ const { Pool } = pg;
 dotenv.config();
 
 const app = express();
+
+// Path restoration middleware for Vercel Serverless environment
+app.use((req, res, next) => {
+  const matchedPath = req.headers["x-matched-path"] || req.headers["x-vercel-forwarded-path"];
+  if (matchedPath && typeof matchedPath === "string") {
+    const searchIndex = req.url.indexOf("?");
+    const search = searchIndex !== -1 ? req.url.substring(searchIndex) : "";
+    req.url = matchedPath + search;
+  }
+  next();
+});
+
 app.use(compression());
 const PORT = 3000;
 
@@ -4543,6 +4554,7 @@ Sitemap: https://www.bantconfirm.com/sitemap.xml`;
   });
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

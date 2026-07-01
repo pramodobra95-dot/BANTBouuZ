@@ -181,7 +181,7 @@ function OAuthCallbackHandler() {
 
 export default function App() {
   // Redirect callback if path matches /auth/callback
-  if (window.location.pathname === "/auth/callback" || window.location.pathname === "/auth/callback/") {
+  if (typeof window !== "undefined" && (window.location.pathname === "/auth/callback" || window.location.pathname === "/auth/callback/")) {
     return <OAuthCallbackHandler />;
   }
   const location = useLocation();
