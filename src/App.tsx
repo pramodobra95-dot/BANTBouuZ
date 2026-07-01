@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -8,21 +8,28 @@ import {
   Menu, X, AlertCircle, AlertTriangle, Info, Copy, Facebook, Instagram, Linkedin
 } from "lucide-react";
 import HomeView from "./components/HomeView";
-import ProductDetailPage from "./components/ProductDetailPage";
-import UserPanel from "./components/UserPanel";
-import VendorPanel from "./components/VendorPanel";
-import AdminPanel from "./components/AdminPanel";
-import BlogsView from "./components/BlogsView";
-import BecomePartnerView from "./components/BecomePartnerView";
-import AIChatBot from "./components/AIChatBot";
-import Footer from "./components/Footer";
-import SEOViewer from "./components/SEOViewer";
-import { ResetPasswordView } from "./components/ResetPasswordView";
-import { AboutPage, TermsPage, PrivacyPage } from "./components/CMSPages";
+
+// Lazy-loaded components for optimal bundle performance and code-splitting
+const ProductDetailPage = lazy(() => import("./components/ProductDetailPage"));
+const UserPanel = lazy(() => import("./components/UserPanel"));
+const VendorPanel = lazy(() => import("./components/VendorPanel"));
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const BlogsView = lazy(() => import("./components/BlogsView"));
+const BecomePartnerView = lazy(() => import("./components/BecomePartnerView"));
+const AIChatBot = lazy(() => import("./components/AIChatBot"));
+const Footer = lazy(() => import("./components/Footer"));
+const SEOViewer = lazy(() => import("./components/SEOViewer"));
+const ResetPasswordView = lazy(() => import("./components/ResetPasswordView").then(m => ({ default: m.ResetPasswordView })));
+const SourcingLandingPage = lazy(() => import("./components/SourcingLandingPage"));
+
+// Lazy load CMS Pages
+const AboutPage = lazy(() => import("./components/CMSPages").then(m => ({ default: m.AboutPage })));
+const TermsPage = lazy(() => import("./components/CMSPages").then(m => ({ default: m.TermsPage })));
+const PrivacyPage = lazy(() => import("./components/CMSPages").then(m => ({ default: m.PrivacyPage })));
+
 import { safeAlert } from "./utils/safeAlert";
 import { supabase, isSupabaseConfigured } from "./lib/supabaseClient";
 import { matchSourcingRoute, generateSourcingSEO } from "./lib/seoData";
-import SourcingLandingPage from "./components/SourcingLandingPage";
 
 import { 
   Category, Product, Vendor, Lead, Blog, Banner, Testimonial, Notification, TrustedVendor 
@@ -191,15 +198,57 @@ export default function App() {
     }
   });
 
-  // State arrays fetched from backend
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  // State arrays fetched from backend (with instant localStorage cache fallback for <1s loading speed)
+  const [categories, setCategories] = useState<Category[]>(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("cache_categories") : null;
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("cache_products") : null;
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [vendors, setVendors] = useState<Vendor[]>(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("cache_vendors") : null;
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [blogs, setBlogs] = useState<Blog[]>([]);
+  const [blogs, setBlogs] = useState<Blog[]>(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("cache_blogs") : null;
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [banners, setBanners] = useState<Banner[]>([]);
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  const [trustedVendors, setTrustedVendors] = useState<TrustedVendor[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("cache_testimonials") : null;
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [trustedVendors, setTrustedVendors] = useState<TrustedVendor[]>(() => {
+    try {
+      const cached = typeof window !== "undefined" ? localStorage.getItem("cache_trusted_vendors") : null;
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [cmsPages, setCmsPages] = useState<Record<string, string>>({});
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
@@ -571,6 +620,7 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'signup'>('login');
   const [authLoading, setAuthLoading] = useState(false);
+  const [showAI, setShowAI] = useState(false);
   
   // Login fields state
   const [authEmail, setAuthEmail] = useState("");
@@ -878,7 +928,7 @@ export default function App() {
   };
 
   // Loading flags
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // SEO modal viewer
   const [seoViewerOpen, setSeoViewerOpen] = useState(false);
@@ -1266,6 +1316,20 @@ export default function App() {
       setTestimonials(Array.isArray(resTestimonials) ? resTestimonials : []);
       setNotifications(Array.isArray(resNotifications) ? resNotifications : []);
       setCmsPages(resSettings || {});
+
+      // Cache homepage data for immediate loads
+      try {
+        if (typeof window !== "undefined" && window.localStorage) {
+          localStorage.setItem("cache_categories", JSON.stringify(Array.isArray(resCats) ? resCats : []));
+          localStorage.setItem("cache_products", JSON.stringify(Array.isArray(resProds) ? resProds : []));
+          localStorage.setItem("cache_vendors", JSON.stringify(Array.isArray(resVendors) ? resVendors : []));
+          localStorage.setItem("cache_trusted_vendors", JSON.stringify(Array.isArray(resTrustedVendors) ? resTrustedVendors : []));
+          localStorage.setItem("cache_blogs", JSON.stringify(Array.isArray(resBlogs) ? resBlogs : []));
+          localStorage.setItem("cache_testimonials", JSON.stringify(Array.isArray(resTestimonials) ? resTestimonials : []));
+        }
+      } catch (cacheErr) {
+        console.warn("Could not save to localStorage cache:", cacheErr);
+      }
       
       if (resUser && resUser.id) {
         setCurrentUser(resUser);
@@ -1282,6 +1346,19 @@ export default function App() {
 
   useEffect(() => {
     fetchAllData();
+
+    // Defer AI chatbot and prefetch routes to ensure instant initial homepage response (<1s)
+    const lazyTimer = setTimeout(() => {
+      setShowAI(true);
+      
+      // Prefetch heavy components inside the browser cache to make tab routing instant
+      import("./components/ProductDetailPage").catch(() => {});
+      import("./components/VendorPanel").catch(() => {});
+      import("./components/AdminPanel").catch(() => {});
+      import("./components/BlogsView").catch(() => {});
+    }, 1500);
+
+    return () => clearTimeout(lazyTimer);
   }, []);
 
   // Recovery Flow Global Interceptor: If URL has recovery parameters or we get a PASSWORD_RECOVERY event, direct to reset-password
@@ -2999,7 +3076,13 @@ export default function App() {
             <p className="text-xs text-slate-500 font-bold">Verifying certified B2B databases...</p>
           </div>
         ) : (
-          <AnimatePresence mode="wait">
+          <Suspense fallback={
+            <div className="py-24 text-center space-y-3">
+              <span className="w-8 h-8 rounded-full border-4 border-[#0066FF] border-t-transparent animate-spin inline-block" />
+              <p className="text-xs text-slate-500 font-bold">Verifying B2B database configurations...</p>
+            </div>
+          }>
+            <AnimatePresence mode="wait">
             {/* Home view */}
             {activeTab === 'home' && (
               <motion.div
@@ -3409,15 +3492,22 @@ export default function App() {
               </motion.div>
             )}
           </AnimatePresence>
+          </Suspense>
         )}
       </main>
 
       {/* FLOAT AI BUSINESS CONSULTANT CHATBOT */}
-      <AIChatBot />
+      {showAI && (
+        <Suspense fallback={null}>
+          <AIChatBot />
+        </Suspense>
+      )}
 
       {/* DYNAMIC SEO SITE CONFIGURE VIEW MODAL */}
       {seoViewerOpen && (
-        <SEOViewer onClose={() => setSeoViewerOpen(false)} />
+        <Suspense fallback={null}>
+          <SEOViewer onClose={() => setSeoViewerOpen(false)} />
+        </Suspense>
       )}
 
       {/* UNIFIED AUTHENTICATION MODAL */}

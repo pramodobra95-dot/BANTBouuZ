@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Category, Product, Vendor, Blog, Banner, Testimonial, TrustedVendor } from "../types";
 import { safeAlert } from "../utils/safeAlert";
+import { LazySection } from "./LazySection";
 
 interface HomeViewProps {
   currentUser: any;
@@ -562,48 +563,62 @@ export default function HomeView({
             className="flex items-stretch gap-4 overflow-x-auto py-3 px-1 snap-x scroll-smooth no-scrollbar"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            {filteredCategories.map((cat, idx) => (
-              <motion.div
-                key={idx}
-                whileHover={{ y: -5, scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                initial={{ opacity: 0, x: 25 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.35, delay: Math.min(idx * 0.03, 0.3), ease: "easeOut" }}
-                onClick={() => {
-                  setSelectedCategory(selectedCategory === cat.name ? null : cat.name);
-                  const el = document.getElementById("featured-products-catalog");
-                  el?.scrollIntoView({ behavior: "smooth" });
-                }}
-                className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center space-y-2.5 group shrink-0 w-36 sm:w-40 md:w-44 snap-start ${
-                  selectedCategory === cat.name 
-                    ? "bg-blue-50/50 border-blue-500 ring-2 ring-blue-500/20 shadow-md" 
-                    : "bg-white border-slate-200 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/5"
-                }`}
-              >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                  selectedCategory === cat.name
-                    ? "bg-[#0066FF] text-white"
-                    : "bg-blue-50 text-blue-600 group-hover:bg-[#0066FF] group-hover:text-white"
-                }`}>
-                  <Layers className="w-5 h-5" />
+            {categories.length === 0 ? (
+              // Beautiful Category Skeleton Loading
+              [...Array(6)].map((_, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 rounded-xl border border-slate-100 bg-white animate-pulse flex flex-col items-center text-center space-y-2.5 shrink-0 w-36 sm:w-40 md:w-44"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-slate-200" />
+                  <div className="h-3 bg-slate-200 rounded w-20" />
+                  <div className="h-2.5 bg-slate-150 rounded w-12" />
                 </div>
-                <div>
-                  <h4 className={`font-bold text-xs transition-colors line-clamp-1 ${
-                    selectedCategory === cat.name ? "text-[#0066FF]" : "text-slate-800 group-hover:text-[#0066FF]"
-                  }`}>{cat.name}</h4>
-                  <p className="text-[10px] text-slate-400 mt-0.5">{cat.count}</p>
-                </div>
-              </motion.div>
-            ))}
-            {filteredCategories.length === 0 && (
+              ))
+            ) : (
+              filteredCategories.map((cat, idx) => (
+                <motion.div
+                  key={idx}
+                  whileHover={{ y: -5, scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  initial={{ opacity: 0, x: 25 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.35, delay: Math.min(idx * 0.03, 0.3), ease: "easeOut" }}
+                  onClick={() => {
+                    setSelectedCategory(selectedCategory === cat.name ? null : cat.name);
+                    const el = document.getElementById("featured-products-catalog");
+                    el?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center space-y-2.5 group shrink-0 w-36 sm:w-40 md:w-44 snap-start ${
+                    selectedCategory === cat.name 
+                      ? "bg-blue-50/50 border-blue-500 ring-2 ring-blue-500/20 shadow-md" 
+                      : "bg-white border-slate-200 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/5"
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                    selectedCategory === cat.name
+                      ? "bg-[#0066FF] text-white"
+                      : "bg-blue-50 text-blue-600 group-hover:bg-[#0066FF] group-hover:text-white"
+                  }`}>
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className={`font-bold text-xs transition-colors line-clamp-1 ${
+                      selectedCategory === cat.name ? "text-[#0066FF]" : "text-slate-800 group-hover:text-[#0066FF]"
+                    }`}>{cat.name}</h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{cat.count}</p>
+                  </div>
+                </motion.div>
+              ))
+            )}
+            {categories.length > 0 && filteredCategories.length === 0 && (
               <div className="w-full py-10 text-center text-xs text-slate-400">
                 No matching categories found. Try searching 'CRM' or 'Cloud'
               </div>
             )}
           </div>
         </div>
-      </div>    </div>
+      </div>
 
       {/* 4. FEATURED PRODUCTS (ECOMMERCE STYLE CARDS) */}
       <div id="featured-products-catalog" className="max-w-7xl mx-auto px-6 py-8">
@@ -627,78 +642,102 @@ export default function HomeView({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {filteredProducts.map((p) => (
-            <div 
-              key={p.id} 
-              className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-lg transition-all flex flex-col group relative"
-            >
-              {p.isFeatured && (
-                <span className="absolute top-3 left-3 bg-yellow-400 text-slate-950 font-extrabold text-[10px] uppercase px-2 py-0.5 rounded shadow-sm z-10 flex items-center gap-1">
-                  <Star className="w-3 h-3 fill-slate-950" />
-                  Premium Sponsored
-                </span>
-              )}
-
-              {/* Product Image */}
+          {products.length === 0 ? (
+            // Beautiful Product Skeleton Loading Cards
+            [...Array(6)].map((_, idx) => (
               <div 
-                onClick={() => handleOpenProduct(p)}
-                className="h-44 bg-slate-100 overflow-hidden relative cursor-pointer group/img"
+                key={idx}
+                className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-xs animate-pulse flex flex-col h-[400px]"
               >
-                <img 
-                  src={p.images[0] || "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=500&auto=format&fit=crop"} 
-                  alt={p.name}
-                  className="w-full h-full object-cover group-hover/img:scale-105 transition-all duration-300"
-                  referrerPolicy="no-referrer"
-                />
-                <span className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] px-2 py-1 rounded">
-                  {p.category}
-                </span>
-              </div>
-
-              {/* Product Info */}
-              <div className="p-4 flex-1 flex flex-col space-y-3">
-                <div onClick={() => handleOpenProduct(p)} className="cursor-pointer group/info">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#0066FF] font-bold uppercase tracking-wider group-hover/info:underline">Verified Solution Provider</span>
-                    <div className="flex items-center text-xs text-yellow-500 font-bold gap-0.5">
-                      <Star className="w-3.5 h-3.5 fill-yellow-500" />
-                      <span>{p.rating}</span>
-                    </div>
+                <div className="h-44 bg-slate-200" />
+                <div className="p-4 flex-grow flex flex-col justify-between space-y-3">
+                  <div className="space-y-2">
+                    <div className="h-4 bg-slate-200 rounded w-3/4" />
+                    <div className="h-3 bg-slate-200 rounded w-1/2" />
                   </div>
-                  <h4 className="font-bold text-sm text-slate-800 mt-1 line-clamp-1 group-hover/info:text-[#0066FF] transition-colors">{p.name}</h4>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{p.description}</p>
-                </div>
-
-                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100/80">
-                  <p className="text-[10px] text-slate-400 font-bold uppercase">Estimated Pricing</p>
-                  <p className="text-xs font-black text-slate-800">{p.pricing}</p>
-                </div>
-
-                <div className="border-t border-slate-100 pt-3 flex items-center justify-between text-xs text-slate-400">
-                  <span className="font-semibold text-slate-600 truncate max-w-[150px]">By: {p.vendorName}</span>
-                  <span className="font-mono text-[10px]">{p.views || 0} Views</span>
-                </div>
-
-                {/* Buttons */}
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    onClick={() => handleOpenProduct(p)}
-                    className="border border-slate-200 hover:border-[#0066FF] hover:text-[#0066FF] text-slate-700 font-semibold py-2 rounded-lg text-xs transition-all cursor-pointer text-center"
-                  >
-                    View Details
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedQuoteProduct(p);
-                    }}
-                    className="bg-[#0066FF] hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-xs transition-all cursor-pointer shadow-xs text-center"
-                  >
-                    Get Free Quote
-                  </button>
+                  <div className="space-y-1.5 pt-2">
+                    <div className="h-2.5 bg-slate-150 rounded w-full" />
+                    <div className="h-2.5 bg-slate-150 rounded w-5/6" />
+                  </div>
+                  <div className="h-10 bg-slate-100 rounded w-full" />
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            filteredProducts.map((p) => (
+              <div 
+                key={p.id} 
+                className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-lg transition-all flex flex-col group relative"
+              >
+                {p.isFeatured && (
+                  <span className="absolute top-3 left-3 bg-yellow-400 text-slate-950 font-extrabold text-[10px] uppercase px-2 py-0.5 rounded shadow-sm z-10 flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 fill-slate-950" />
+                    Premium Sponsored
+                  </span>
+                )}
+
+                {/* Product Image */}
+                <div 
+                  onClick={() => handleOpenProduct(p)}
+                  className="h-44 bg-slate-100 overflow-hidden relative cursor-pointer group/img"
+                >
+                  <img 
+                    src={p.images[0] || "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=500&auto=format&fit=crop"} 
+                    alt={p.name}
+                    className="w-full h-full object-cover group-hover/img:scale-105 transition-all duration-300"
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                  />
+                  <span className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-xs text-white text-[10px] px-2 py-1 rounded">
+                    {p.category}
+                  </span>
+                </div>
+
+                {/* Product Info */}
+                <div className="p-4 flex-1 flex flex-col space-y-3">
+                  <div onClick={() => handleOpenProduct(p)} className="cursor-pointer group/info">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-[#0066FF] font-bold uppercase tracking-wider group-hover/info:underline">Verified Solution Provider</span>
+                      <div className="flex items-center text-xs text-yellow-500 font-bold gap-0.5">
+                        <Star className="w-3.5 h-3.5 fill-yellow-500" />
+                        <span>{p.rating}</span>
+                      </div>
+                    </div>
+                    <h4 className="font-bold text-sm text-slate-800 mt-1 line-clamp-1 group-hover/info:text-[#0066FF] transition-colors">{p.name}</h4>
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{p.description}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100/80">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Estimated Pricing</p>
+                    <p className="text-xs font-black text-slate-800">{p.pricing}</p>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-3 flex items-center justify-between text-xs text-slate-400">
+                    <span className="font-semibold text-slate-600 truncate max-w-[150px]">By: {p.vendorName}</span>
+                    <span className="font-mono text-[10px]">{p.views || 0} Views</span>
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      onClick={() => handleOpenProduct(p)}
+                      className="border border-slate-200 hover:border-[#0066FF] hover:text-[#0066FF] text-slate-700 font-semibold py-2 rounded-lg text-xs transition-all cursor-pointer text-center"
+                    >
+                      View Details
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedQuoteProduct(p);
+                      }}
+                      className="bg-[#0066FF] hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-xs transition-all cursor-pointer shadow-xs text-center"
+                    >
+                      Get Free Quote
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
 
           {filteredProducts.length === 0 && (
             <div className="col-span-full py-12 text-center bg-white border border-dashed border-slate-200 rounded-xl space-y-2">
@@ -715,65 +754,90 @@ export default function HomeView({
       </div>
 
       {/* 5. FEATURED VENDORS (AUTO SCROLLING LOGO AND INFO CARDS) */}
-      <div className="bg-white border-y border-slate-200 py-12 my-8">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center space-y-1 mb-8">
-            <span className="text-[#0066FF] font-bold text-xs uppercase tracking-wider">Verified Partnership Alliance</span>
-            <h3 className="text-lg md:text-xl font-black text-slate-900">Featured Platform System Integrators</h3>
-            <p className="text-xs text-slate-500">Gold and Enterprise plans verified with strict GST and corporate document registry audits</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {vendors.filter(v => v.approved).map((vendor) => (
-              <div 
-                key={vendor.id} 
-                className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 hover:bg-white hover:shadow-md transition-all space-y-3.5 relative"
-              >
-                {vendor.plan === 'Enterprise' && (
-                  <span className="absolute top-3 right-3 bg-blue-100 text-[#0066FF] text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase">
-                    Enterprise
-                  </span>
-                )}
-                <div className="flex items-center space-x-3">
-                  <img 
-                    src={vendor.logo} 
-                    alt={vendor.companyName} 
-                    className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div>
-                    <h4 className="font-bold text-xs text-slate-800 line-clamp-1">{vendor.companyName}</h4>
-                    <p className="text-[10px] text-slate-400">{vendor.location}</p>
+      <LazySection fallback={
+        <div className="bg-white border-y border-slate-200 py-12 my-8 animate-pulse">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center space-y-1 mb-8">
+              <div className="h-3 bg-slate-200 rounded w-48 mx-auto" />
+              <div className="h-4 bg-slate-200 rounded w-64 mx-auto" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {[...Array(4)].map((_, idx) => (
+                <div key={idx} className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-slate-200 rounded-lg" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-3 bg-slate-200 rounded w-24" />
+                      <div className="h-2 bg-slate-200 rounded w-16" />
+                    </div>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 border-t border-slate-100 pt-3">
-                  <div>
-                    <p className="font-bold">Plan Profile</p>
-                    <p className="text-slate-800 font-semibold">{vendor.plan} Tier</p>
-                  </div>
-                  <div>
-                    <p className="font-bold">Catalog Size</p>
-                    <p className="text-slate-800 font-semibold">{vendor.productsCount || 0} Products</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-[10px] pt-1">
-                  <div className="flex items-center text-yellow-500 font-semibold gap-0.5">
-                    <Star className="w-3 h-3 fill-yellow-500" />
-                    <span>{vendor.rating} / 5</span>
-                  </div>
-                  {vendor.docVerified && (
-                    <span className="text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-100">
-                      Docs Verified
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      }>
+        <div className="bg-white border-y border-slate-200 py-12 my-8">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center space-y-1 mb-8">
+              <span className="text-[#0066FF] font-bold text-xs uppercase tracking-wider">Verified Partnership Alliance</span>
+              <h3 className="text-lg md:text-xl font-black text-slate-900">Featured Platform System Integrators</h3>
+              <p className="text-xs text-slate-500">Gold and Enterprise plans verified with strict GST and corporate document registry audits</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {vendors.filter(v => v.approved).map((vendor) => (
+                <div 
+                  key={vendor.id} 
+                  className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 hover:bg-white hover:shadow-md transition-all space-y-3.5 relative"
+                >
+                  {vendor.plan === 'Enterprise' && (
+                    <span className="absolute top-3 right-3 bg-blue-100 text-[#0066FF] text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase">
+                      Enterprise
+                    </span>
+                  )}
+                  <div className="flex items-center space-x-3">
+                    <img 
+                      src={vendor.logo} 
+                      alt={vendor.companyName} 
+                      className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
+                      referrerPolicy="no-referrer"
+                      loading="lazy"
+                    />
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-800 line-clamp-1">{vendor.companyName}</h4>
+                      <p className="text-[10px] text-slate-400">{vendor.location}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 border-t border-slate-100 pt-3">
+                    <div>
+                      <p className="font-bold">Plan Profile</p>
+                      <p className="text-slate-800 font-semibold">{vendor.plan} Tier</p>
+                    </div>
+                    <div>
+                      <p className="font-bold">Catalog Size</p>
+                      <p className="text-slate-800 font-semibold">{vendor.productsCount || 0} Products</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] pt-1">
+                    <div className="flex items-center text-yellow-500 font-semibold gap-0.5">
+                      <Star className="w-3 h-3 fill-yellow-500" />
+                      <span>{vendor.rating} / 5</span>
+                    </div>
+                    {vendor.docVerified && (
+                      <span className="text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-100">
+                        Docs Verified
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </LazySection>
 
       {/* 6. WHY CHOOSE BANTCONFIRM (ICONS SECTION) */}
       <div className="max-w-7xl mx-auto px-6 py-12">
@@ -1006,44 +1070,122 @@ export default function HomeView({
       </div>
 
       {/* 7. SUCCESS STORIES (HORIZONTAL SCROLLING TESTIMONIALS) */}
-      <div className="bg-slate-100 py-12 border-y border-slate-200/50">
-        <div className="max-w-7xl mx-auto px-6 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <span className="text-blue-600 font-bold text-xs uppercase tracking-wider block">Platform Impact</span>
-              <h3 className="text-xl md:text-2xl font-black text-slate-900 mt-1">Sourcing Officer Success Stories</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Verified Budget, Authority, Need, and Timeline (BANT) case reports</p>
+      <LazySection fallback={
+        <div className="bg-slate-100 py-12 border-y border-slate-200/50 animate-pulse">
+          <div className="max-w-7xl mx-auto px-6 space-y-8">
+            <div className="h-4 bg-slate-200 rounded w-48" />
+            <div className="h-32 bg-slate-250 rounded-xl w-full" />
+          </div>
+        </div>
+      }>
+        <div className="bg-slate-100 py-12 border-y border-slate-200/50">
+          <div className="max-w-7xl mx-auto px-6 space-y-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <span className="text-blue-600 font-bold text-xs uppercase tracking-wider block">Platform Impact</span>
+                <h3 className="text-xl md:text-2xl font-black text-slate-900 mt-1">Sourcing Officer Success Stories</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Verified Budget, Authority, Need, and Timeline (BANT) case reports</p>
+              </div>
+              
+              {/* Scroll Navigation */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => handleTestimonialScroll("left")}
+                  className="w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition shadow-xs hover:shadow active:scale-95 cursor-pointer"
+                  aria-label="Scroll Testimonials Left"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleTestimonialScroll("right")}
+                  className="w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition shadow-xs hover:shadow active:scale-95 cursor-pointer"
+                  aria-label="Scroll Testimonials Right"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="relative">
+              {/* Scroll shading */}
+              <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-slate-100 to-transparent pointer-events-none z-10 hidden md:block" />
+              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-slate-100 to-transparent pointer-events-none z-10 hidden md:block" />
+
+              <div 
+                ref={testimonialScrollRef}
+                className="flex items-stretch gap-6 overflow-x-auto py-4 px-1 snap-x scroll-smooth no-scrollbar"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+                {(() => {
+                  const displayTestimonials = testimonials && testimonials.length >= 5 
+                    ? testimonials 
+                    : [
+                        ...(testimonials || []),
+                        ...LOCAL_FALLBACK_TESTIMONIALS.filter(local => !(testimonials || []).some(t => t.id === local.id))
+                      ].slice(0, 5);
+                  
+                  return displayTestimonials.map((t, idx) => {
+                    const isSelected = activeTestimonialIdx === idx;
+                    return (
+                      <motion.div
+                        key={t.id || idx}
+                        whileHover={{ y: -6, scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        initial={{ opacity: 0, x: 30 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.4, delay: Math.min(idx * 0.05, 0.45), ease: "easeOut" }}
+                        onClick={() => setActiveTestimonialIdx(idx)}
+                        className={`p-6 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-4 shrink-0 w-[290px] sm:w-[320px] md:w-[360px] snap-start ${
+                          isSelected 
+                            ? "bg-white border-[#0066FF] ring-2 ring-[#0066FF]/20 shadow-md shadow-[#0066FF]/5" 
+                            : "bg-white border-slate-200/80 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/5"
+                        }`}
+                      >
+                        <div className="space-y-3">
+                          {/* Rating stars */}
+                          <div className="flex items-center space-x-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} className="w-3.5 h-3.5 fill-[#FFC107] text-[#FFC107]" />
+                            ))}
+                          </div>
+                          
+                          {/* Feedback copy */}
+                          <p className="text-xs text-slate-600 leading-relaxed italic line-clamp-5">
+                            "{t.feedback}"
+                          </p>
+                        </div>
+
+                        {/* Author block */}
+                        <div className="flex items-center space-x-3 pt-2 border-t border-slate-100">
+                          {t.avatar ? (
+                            <img 
+                              src={t.avatar} 
+                              alt={t.name} 
+                              className={`w-9 h-9 rounded-full object-cover border ${
+                                isSelected ? "border-[#0066FF]" : "border-slate-200"
+                              }`}
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
+                              {t.name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="text-left">
+                            <h4 className={`font-bold text-xs ${isSelected ? "text-[#0066FF]" : "text-slate-800"}`}>{t.name}</h4>
+                            <p className="text-[10px] text-slate-400 font-medium">{t.role}</p>
+                            <p className="text-[9px] text-blue-600/80 font-bold tracking-tight uppercase">{t.company}</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  });
+                })()}
+              </div>
             </div>
             
-            {/* Scroll Navigation */}
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => handleTestimonialScroll("left")}
-                className="w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition shadow-xs hover:shadow active:scale-95 cursor-pointer"
-                aria-label="Scroll Testimonials Left"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleTestimonialScroll("right")}
-                className="w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 flex items-center justify-center transition shadow-xs hover:shadow active:scale-95 cursor-pointer"
-                aria-label="Scroll Testimonials Right"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="relative">
-            {/* Scroll shading */}
-            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-slate-100 to-transparent pointer-events-none z-10 hidden md:block" />
-            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-slate-100 to-transparent pointer-events-none z-10 hidden md:block" />
-
-            <div 
-              ref={testimonialScrollRef}
-              className="flex items-stretch gap-6 overflow-x-auto py-4 px-1 snap-x scroll-smooth no-scrollbar"
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-            >
+            {/* Slider pagination indicators */}
+            <div className="flex justify-center space-x-1.5 pt-2">
               {(() => {
                 const displayTestimonials = testimonials && testimonials.length >= 5 
                   ? testimonials 
@@ -1052,194 +1194,144 @@ export default function HomeView({
                       ...LOCAL_FALLBACK_TESTIMONIALS.filter(local => !(testimonials || []).some(t => t.id === local.id))
                     ].slice(0, 5);
                 
-                return displayTestimonials.map((t, idx) => {
-                  const isSelected = activeTestimonialIdx === idx;
-                  return (
-                    <motion.div
-                      key={t.id || idx}
-                      whileHover={{ y: -6, scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
-                      initial={{ opacity: 0, x: 30 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.4, delay: Math.min(idx * 0.05, 0.45), ease: "easeOut" }}
-                      onClick={() => setActiveTestimonialIdx(idx)}
-                      className={`p-6 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-4 shrink-0 w-[290px] sm:w-[320px] md:w-[360px] snap-start ${
-                        isSelected 
-                          ? "bg-white border-[#0066FF] ring-2 ring-[#0066FF]/20 shadow-md shadow-[#0066FF]/5" 
-                          : "bg-white border-slate-200/80 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/5"
-                      }`}
-                    >
-                      <div className="space-y-3">
-                        {/* Rating stars */}
-                        <div className="flex items-center space-x-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} className="w-3.5 h-3.5 fill-[#FFC107] text-[#FFC107]" />
-                          ))}
-                        </div>
-                        
-                        {/* Feedback copy */}
-                        <p className="text-xs text-slate-600 leading-relaxed italic line-clamp-5">
-                          "{t.feedback}"
-                        </p>
-                      </div>
-
-                      {/* Author block */}
-                      <div className="flex items-center space-x-3 pt-2 border-t border-slate-100">
-                        {t.avatar ? (
-                          <img 
-                            src={t.avatar} 
-                            alt={t.name} 
-                            className={`w-9 h-9 rounded-full object-cover border ${
-                              isSelected ? "border-[#0066FF]" : "border-slate-200"
-                            }`}
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
-                            {t.name.charAt(0)}
-                          </div>
-                        )}
-                        <div className="text-left">
-                          <h4 className={`font-bold text-xs ${isSelected ? "text-[#0066FF]" : "text-slate-800"}`}>{t.name}</h4>
-                          <p className="text-[10px] text-slate-400 font-medium">{t.role}</p>
-                          <p className="text-[9px] text-blue-600/80 font-bold tracking-tight uppercase">{t.company}</p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                });
+                return displayTestimonials.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setActiveTestimonialIdx(idx);
+                      if (testimonialScrollRef.current) {
+                        const cards = testimonialScrollRef.current.children;
+                        if (cards && cards[idx]) {
+                          (cards[idx] as HTMLElement).scrollIntoView({
+                            behavior: "smooth",
+                            block: "nearest",
+                            inline: "center"
+                          });
+                        }
+                      }
+                    }}
+                    className={`w-2 h-2 rounded-full cursor-pointer transition-all ${
+                      idx === activeTestimonialIdx ? "bg-[#0066FF] w-5" : "bg-slate-300 hover:bg-slate-400"
+                    }`}
+                    aria-label={`Go to story ${idx + 1}`}
+                  />
+                ));
               })()}
             </div>
           </div>
-          
-          {/* Slider pagination indicators */}
-          <div className="flex justify-center space-x-1.5 pt-2">
-            {(() => {
-              const displayTestimonials = testimonials && testimonials.length >= 5 
-                ? testimonials 
-                : [
-                    ...(testimonials || []),
-                    ...LOCAL_FALLBACK_TESTIMONIALS.filter(local => !(testimonials || []).some(t => t.id === local.id))
-                  ].slice(0, 5);
-              
-              return displayTestimonials.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setActiveTestimonialIdx(idx);
-                    if (testimonialScrollRef.current) {
-                      const cards = testimonialScrollRef.current.children;
-                      if (cards && cards[idx]) {
-                        (cards[idx] as HTMLElement).scrollIntoView({
-                          behavior: "smooth",
-                          block: "nearest",
-                          inline: "center"
-                        });
-                      }
-                    }
-                  }}
-                  className={`w-2 h-2 rounded-full cursor-pointer transition-all ${
-                    idx === activeTestimonialIdx ? "bg-[#0066FF] w-5" : "bg-slate-300 hover:bg-slate-400"
-                  }`}
-                  aria-label={`Go to story ${idx + 1}`}
-                />
-              ));
-            })()}
-          </div>
         </div>
-      </div>
+      </LazySection>
 
       {/* 8. LATEST BLOGS (SEO BLOG SECTION) */}
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        <div className="flex justify-between items-end border-b border-slate-200 pb-4 mb-6">
-          <div>
-            <span className="text-blue-600 font-bold text-xs uppercase tracking-wider">B2B Sourcing Intelligence</span>
-            <h3 className="text-lg md:text-xl font-black text-slate-900 mt-1">Sourcing & Procurement Insights</h3>
+      <LazySection fallback={
+        <div className="max-w-7xl mx-auto px-6 py-12 animate-pulse">
+          <div className="h-4 bg-slate-200 rounded w-48 mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[...Array(2)].map((_, idx) => (
+              <div key={idx} className="bg-slate-100 rounded-xl h-48" />
+            ))}
           </div>
-          <button 
-            onClick={() => onNavigateToTab("blogs")} 
-            className="text-xs text-[#0066FF] font-bold hover:underline cursor-pointer"
-          >
-            All Sourcing Manuals &rarr;
-          </button>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {blogs.map((blog) => (
-            <div 
-              key={blog.id}
-              onClick={() => {
-                if (onSelectBlog) onSelectBlog(blog);
-              }}
-              className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col md:flex-row group cursor-pointer hover:border-blue-400 hover:shadow-md transition-all duration-200"
-            >
-              <div className="md:w-1/3 h-44 md:h-auto bg-slate-100 overflow-hidden shrink-0 relative">
-                <img 
-                  src={blog.image} 
-                  alt={blog.title} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-all"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="p-4 flex-1 flex flex-col justify-between space-y-2">
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] bg-blue-50 text-[#0066FF] font-bold px-2 py-0.5 rounded">
-                      {blog.category}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onLikeBlog) onLikeBlog(blog.id);
-                        }}
-                        className="inline-flex items-center gap-1 text-rose-500 hover:text-rose-700 bg-rose-50/50 hover:bg-rose-50 px-2 py-0.5 rounded transition-all cursor-pointer font-bold active:scale-90"
-                        title="Love this article"
-                      >
-                        <Heart className="w-3 h-3 fill-rose-500" />
-                        <span>{blog.likes || 0}</span>
-                      </button>
-                      <span className="text-[10px] text-slate-400">{blog.readTime}</span>
-                    </div>
-                  </div>
-                  <h4 className="font-bold text-xs text-slate-800 mt-2 line-clamp-2 group-hover:text-[#0066FF] transition-colors">
-                    {blog.title}
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
-                    {blog.content.replace(/[#*]/g, "")}
-                  </p>
-                </div>
-                <div className="border-t border-slate-100 pt-2 flex items-center justify-between text-[10px] text-slate-400">
-                  <span>By: {blog.author}</span>
-                  <span className="font-bold text-[#0066FF] group-hover:underline cursor-pointer">Read Guide</span>
-                </div>
-              </div>
+      }>
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="flex justify-between items-end border-b border-slate-200 pb-4 mb-6">
+            <div>
+              <span className="text-blue-600 font-bold text-xs uppercase tracking-wider">B2B Sourcing Intelligence</span>
+              <h3 className="text-lg md:text-xl font-black text-slate-900 mt-1">Sourcing & Procurement Insights</h3>
             </div>
-          ))}
+            <button 
+              onClick={() => onNavigateToTab("blogs")} 
+              className="text-xs text-[#0066FF] font-bold hover:underline cursor-pointer"
+            >
+              All Sourcing Manuals &rarr;
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {blogs.map((blog) => (
+              <div 
+                key={blog.id}
+                onClick={() => {
+                  if (onSelectBlog) onSelectBlog(blog);
+                }}
+                className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col md:flex-row group cursor-pointer hover:border-blue-400 hover:shadow-md transition-all duration-200"
+              >
+                <div className="md:w-1/3 h-44 md:h-auto bg-slate-100 overflow-hidden shrink-0 relative">
+                  <img 
+                    src={blog.image} 
+                    alt={blog.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-all"
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="p-4 flex-1 flex flex-col justify-between space-y-2">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] bg-blue-50 text-[#0066FF] font-bold px-2 py-0.5 rounded">
+                        {blog.category}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onLikeBlog) onLikeBlog(blog.id);
+                          }}
+                          className="inline-flex items-center gap-1 text-rose-500 hover:text-rose-700 bg-rose-50/50 hover:bg-rose-50 px-2 py-0.5 rounded transition-all cursor-pointer font-bold active:scale-90"
+                          title="Love this article"
+                        >
+                          <Heart className="w-3 h-3 fill-rose-500" />
+                          <span>{blog.likes || 0}</span>
+                        </button>
+                        <span className="text-[10px] text-slate-400">{blog.readTime}</span>
+                      </div>
+                    </div>
+                    <h4 className="font-bold text-xs text-slate-800 mt-2 line-clamp-2 group-hover:text-[#0066FF] transition-colors">
+                      {blog.title}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                      {blog.content.replace(/[#*]/g, "")}
+                    </p>
+                  </div>
+                  <div className="border-t border-slate-100 pt-2 flex items-center justify-between text-[10px] text-slate-400">
+                    <span>By: {blog.author}</span>
+                    <span className="font-bold text-[#0066FF] group-hover:underline cursor-pointer">Read Guide</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      </LazySection>
 
       {/* 9. REVENUE MODEL PRESENTATION CALLOUT */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-slate-300">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-              <h4 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Award className="w-4 h-4 text-yellow-400" />
-                BANTConfirm Marketplace Monetization & Revenue Architecture
-              </h4>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Self-sustaining ecosystem powered by high-intent qualified enterprise sourcing triggers.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 text-[10px]">
-              <span className="bg-slate-800 text-slate-300 py-1 px-2 rounded font-semibold border border-slate-700">Vendor SaaS Subscriptions (Free, Silver, Gold, Enterprise)</span>
-              <span className="bg-slate-800 text-slate-300 py-1 px-2 rounded font-semibold border border-slate-700">BANT Qualified Lead Purchase Credits</span>
-              <span className="bg-slate-800 text-slate-300 py-1 px-2 rounded font-semibold border border-slate-700">Sponsored Featured Slices</span>
-              <span className="bg-slate-800 text-slate-300 py-1 px-2 rounded font-semibold border border-slate-700">5% Commission on Closed Deals</span>
+      <LazySection fallback={
+        <div className="max-w-7xl mx-auto px-6 py-6 animate-pulse">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 h-20" />
+        </div>
+      }>
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-slate-300">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h4 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-yellow-400" />
+                  BANTConfirm Marketplace Monetization & Revenue Architecture
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Self-sustaining ecosystem powered by high-intent qualified enterprise sourcing triggers.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-[10px]">
+                <span className="bg-slate-800 text-slate-300 py-1 px-2 rounded font-semibold border border-slate-700">Vendor SaaS Subscriptions (Free, Silver, Gold, Enterprise)</span>
+                <span className="bg-slate-800 text-slate-300 py-1 px-2 rounded font-semibold border border-slate-700">BANT Qualified Lead Purchase Credits</span>
+                <span className="bg-slate-800 text-slate-300 py-1 px-2 rounded font-semibold border border-slate-700">Sponsored Featured Slices</span>
+                <span className="bg-slate-800 text-slate-300 py-1 px-2 rounded font-semibold border border-slate-700">5% Commission on Closed Deals</span>
+              </div>
             </div>
           </div>
         </div>
+      </LazySection>
       </div>
 
       {/* 10. BECOME A PARTNER SECTION REMOVED FROM HOME PAGE TO MEET USER TARGET */}

@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import compression from "compression";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -10,6 +11,7 @@ const { Pool } = pg;
 dotenv.config();
 
 const app = express();
+app.use(compression());
 const PORT = 3000;
 
 // Enable JSON bodies
@@ -4548,7 +4550,19 @@ Sitemap: https://www.bantconfirm.com/sitemap.xml`;
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    // Serve static files with 1 year max-age, immutable for hashed assets
+    app.use(express.static(distPath, {
+      maxAge: '31536000s', // 1 year
+      immutable: true,
+      setHeaders: (res, filepath) => {
+        if (filepath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else {
+          // CSS, JS, Images, Fonts are hashed/static, can be cached aggressively
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      }
+    }));
     app.get("*", (req, res) => {
       try {
         let templatePath = path.join(distPath, "index.html");
