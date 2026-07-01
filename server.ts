@@ -4583,8 +4583,6 @@ Sitemap: https://www.bantconfirm.com/sitemap.xml`;
   }
 }
 
-if (!process.env.VERCEL) {
-  startServer();
-}
+startServer();
 
 export default app;

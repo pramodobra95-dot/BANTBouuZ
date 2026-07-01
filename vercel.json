@@ -2,6 +2,11 @@
   "cleanUrls": true,
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/assets/:path*", "destination": "/dist/assets/:path*" },
+    { "source": "/favicon.png", "destination": "/dist/favicon.png" },
+    { "source": "/favicon.ico", "destination": "/dist/favicon.png" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap.xml" },
+    { "source": "/robots.txt", "destination": "/api/robots.txt" },
+    { "source": "/((?!api/).*)", "destination": "/dist/index.html" }
   ]
 }
